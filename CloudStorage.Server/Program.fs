@@ -23,6 +23,8 @@ let ConfigureLogging (loggerBuilder: ILoggingBuilder) =
 // 主程序
 [<EntryPoint>]
 let main argv =
+    Dapper.FSharp.OptionTypes.register()
+    
     Host
         .CreateDefaultBuilder(argv)
         .ConfigureWebHostDefaults(fun webHostBuilder ->

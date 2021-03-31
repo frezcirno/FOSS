@@ -9,16 +9,26 @@ let routes : HttpHandler =
         route "/ping" >=> Successful.ok (text "pong!")
         route "/time" >=> warbler (fun _ -> text <| DateTime.Now.ToString())
         
-        route "/file/upload" >=> choose [
+        route "/file/upload" >=> Handler.CheckToken >=> choose [
             GET >=> htmlView Views.upload
-            POST >=> Handlers.FileUploadHandler 
+            POST >=> Handler.FileUploadHandler
         ]
         route "/file/upload/suc" >=> Successful.ok (text "Upload finished!")
-        route "/file/meta" >=> Handlers.FileMetaHandler
-        route "/file/query" >=> Handlers.FileQueryHandler
-        route "/file/download" >=> Handlers.FileDownloadHandler
-        route "/file/update" >=> POST >=> Handlers.FileMetaUpdateHandler
-        route "/file/delete" >=> Handlers.FileDeleteHandler
+        route "/file/meta" >=> Handler.CheckToken >=> Handler.FileMetaHandler
+        route "/file/query" >=> Handler.CheckToken >=> Handler.FileQueryHandler
+        route "/file/download" >=> Handler.CheckToken >=> Handler.FileDownloadHandler
+        route "/file/update" >=> Handler.CheckToken >=> POST >=> Handler.FileUpdateHandler
+        route "/file/delete" >=> Handler.CheckToken >=> Handler.FileDeleteHandler
         
+        route "/user/signup" >=> choose [
+            GET >=> htmlView Views.signup
+            POST >=> Handler.UserSignupHandler
+        ]
+        route "/user/signin" >=> choose [
+            GET >=> htmlView Views.signup
+            POST >=> Handler.UserSigninHandler
+        ]
+        route "/user/info" >=> Handler.CheckToken >=> Handler.UserInfoHandler
+
         RequestErrors.notFound (text "Not Found")
     ]
