@@ -7,14 +7,11 @@ open System.Security.Cryptography
 open FSharp.Control.Tasks.V2.ContextInsensitive
 open Microsoft.AspNetCore.Http
 open Giraffe
-open Giraffe.ComputationExpressions
-
-open FileMeta
 
 let ByteToHex (bytes:byte[]) =
     bytes |> Array.fold (fun state x -> state + sprintf "%02X" x) ""
 
-let UploadHandler : HttpHandler =
+let FileUploadHandler : HttpHandler =
     fun (next : HttpFunc) (ctx : HttpContext) ->
         match ctx.Request.HasFormContentType with
         | false -> RequestErrors.BAD_REQUEST "Bad request" next ctx
@@ -24,18 +21,17 @@ let UploadHandler : HttpHandler =
                 
                 use sha1 = HashAlgorithm.Create ("sha1")
                 let fileSha1 = fileStream |> sha1.ComputeHash |> ByteToHex
-                
                 use newFile = File.Create ("C:/dev/.net/CloudStorage/CloudStorage.Server/tmp/" + fileSha1)
-                do! file.CopyToAsync (newFile)
-                
-                let fMeta =
+                do! file.CopyToAsync newFile
+               
+                let fileMeta =
                     { FileSha1 = fileSha1
                       FileName = file.FileName
                       FileSize = fileStream.Length
                       Location = newFile.Name
                       UploadAt = DateTime.Now.ToIsoString () }
                  
-                UpdateFileMeta fMeta |> ignore
+                Service.CreateFileMeta fileMeta
             return! redirectTo false "/file/upload/suc" next ctx
         }
 
@@ -44,25 +40,25 @@ let FileMetaHandler : HttpHandler =
         (match ctx.GetQueryStringValue "filehash" with
         | Error msg -> RequestErrors.BAD_REQUEST msg
         | Ok fileHash ->
-            match GetFileMeta fileHash with
+            match Service.GetFileMetaByHash fileHash with
             | None -> Successful.NO_CONTENT
-            | Some fMeta -> json fMeta
+            | Some fileMeta -> json fileMeta
         ) next ctx
 
 let FileQueryHandler : HttpHandler =
     fun (next : HttpFunc) (ctx : HttpContext) ->
         let limit = ctx.TryGetQueryStringValue "limit" |> Option.defaultValue "5" |> Int32.Parse
-        json (GetLatestFileMetas limit) next ctx
+        json (Service.GetLatestFileMetas limit) next ctx
 
 let FileDownloadHandler : HttpHandler =
     fun (next : HttpFunc) (ctx : HttpContext) ->
         match ctx.GetQueryStringValue "filehash" with
         | Result.Error msg -> RequestErrors.BAD_REQUEST msg next ctx
         | Ok fileHash ->
-            match GetFileMeta fileHash with
+            match Service.GetFileMetaByHash fileHash with
             | None -> RequestErrors.NOT_FOUND "File Not Found" next ctx
-            | Some fMeta ->
-                streamFile true fMeta.Location None None next ctx
+            | Some fileMeta ->
+                streamFile true fileMeta.Location None None next ctx
 
 [<CLIMutable>]
 type FileMetaBlock = { filehash : string
@@ -77,22 +73,22 @@ let FileMetaUpdateHandler : HttpHandler =
             if fileMetaBlock.op <> "O" then
                 RequestErrors.METHOD_NOT_ALLOWED ""
             else 
-                match GetFileMeta fileMetaBlock.filehash with
+                match Service.GetFileMetaByHash fileMetaBlock.filehash with
                 | None -> RequestErrors.NOT_FOUND "File Not Found"
-                | Some fMeta ->
-                    UpdateFileMeta {fMeta with FileName = fileMetaBlock.filename}
-                    Successful.ok (json fMeta))
+                | Some fileEntity ->
+                    Service.UpdateFileMeta {fileEntity with FileName = fileMetaBlock.filename}
+                    Successful.ok (json fileEntity))
 
 let FileDeleteHandler : HttpHandler =
     fun (next : HttpFunc) (ctx : HttpContext) ->
         (match ctx.GetQueryStringValue "filehash" with
         | Error msg -> RequestErrors.BAD_REQUEST msg
         | Ok fileHash ->
-            match GetFileMeta fileHash with
+            match Service.GetFileMetaByHash fileHash with
             | None -> Successful.OK "OK"
-            | Some fMeta ->
-                File.Delete fMeta.Location
-                DeleteFileMeta fileHash |> ignore
+            | Some fileMeta ->
+                File.Delete fileMeta.Location
+                Service.DeleteFileMeta fileHash |> ignore
                 Successful.OK "OK"
         ) next ctx
         

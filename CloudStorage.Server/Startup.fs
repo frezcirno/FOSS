@@ -1,4 +1,4 @@
-module CloudStorage.Server.Startup
+namespace CloudStorage.Server
 
 open Microsoft.AspNetCore.Builder
 open Microsoft.Extensions.Configuration
@@ -22,8 +22,8 @@ type Startup(configuration: IConfiguration) =
         if env.IsDevelopment() then
             app
                 .UseDeveloperExceptionPage()
-                .UseSwagger()
-                .UseSwaggerUI(fun c -> c.SwaggerEndpoint("/swagger/v1/swagger.json", "test v1"))
+                //.UseSwagger()
+                //.UseSwaggerUI(fun c -> c.SwaggerEndpoint("/swagger/v1/swagger.json", "test v1"))
             |> ignore
 
         app

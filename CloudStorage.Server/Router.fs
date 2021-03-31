@@ -11,7 +11,7 @@ let routes : HttpHandler =
         
         route "/file/upload" >=> choose [
             GET >=> htmlView Views.upload
-            POST >=> Handlers.UploadHandler 
+            POST >=> Handlers.FileUploadHandler 
         ]
         route "/file/upload/suc" >=> Successful.ok (text "Upload finished!")
         route "/file/meta" >=> Handlers.FileMetaHandler

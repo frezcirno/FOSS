@@ -1,9 +1,9 @@
+open CloudStorage.Server
 open System
 open Microsoft.AspNetCore.Hosting
 open Microsoft.Extensions.Hosting
 open Microsoft.Extensions.Logging
 open Giraffe
-open CloudStorage.Server.Startup
 
 let errorHandler (ex: Exception) (logger: ILogger) =
     logger.LogError(EventId(), ex, "An unhandled exception has occurred while executing the request.")
@@ -29,7 +29,7 @@ let main argv =
             webHostBuilder
                 .UseStartup<Startup>()
                 .UseKestrel(fun k -> k.AddServerHeader <- false)
-                |> ignore)
+            |> ignore)
         .ConfigureLogging(ConfigureLogging)
         .Build()
         .Run()
