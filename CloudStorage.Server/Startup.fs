@@ -1,6 +1,12 @@
 namespace CloudStorage.Server
 
 open Microsoft.AspNetCore.Builder
+open Microsoft.AspNetCore.Identity
+open Microsoft.AspNetCore.Authentication
+open Microsoft.AspNetCore.Authentication.Cookies
+open Microsoft.AspNetCore.Authentication.JwtBearer
+open Microsoft.AspNetCore.Authorization
+open Microsoft.AspNetCore.Http
 open Microsoft.Extensions.Configuration
 open Microsoft.Extensions.DependencyInjection
 open Microsoft.Extensions.Hosting
@@ -14,6 +20,26 @@ type Startup(configuration: IConfiguration) =
     member _.ConfigureServices(services: IServiceCollection) =
         services
             .AddResponseCompression()
+            |> ignore
+        
+        services
+            .AddIdentity()
+            .AddRoles()
+            |> ignore            
+            
+        services
+            .AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
+            .AddCookie(CookieAuthenticationDefaults.AuthenticationScheme, fun opt ->
+                opt.LoginPath <- PathString "/Account/Unauthorized"
+                opt.AccessDeniedPath <- PathString "/Account/Forbidden"
+            )
+            .AddJwtBearer(JwtBearerDefaults.AuthenticationScheme, fun opt ->
+                opt.Audience <- "http://localhost:5001/"
+                opt.Authority <- "http://localhost:5000/"
+            )
+            |> ignore
+            
+        services
             .AddGiraffe()
             |> ignore
 
@@ -22,9 +48,7 @@ type Startup(configuration: IConfiguration) =
         if env.IsDevelopment() then
             app
                 .UseDeveloperExceptionPage()
-                //.UseSwagger()
-                //.UseSwaggerUI(fun c -> c.SwaggerEndpoint("/swagger/v1/swagger.json", "test v1"))
-            |> ignore
+                |> ignore
 
         app
             .UseGiraffe Router.routes

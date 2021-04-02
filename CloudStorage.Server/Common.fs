@@ -1,8 +1,9 @@
 ﻿namespace CloudStorage.Server
 
+open System
 
 [<AutoOpen>]
-type FileMetaEntity =
+type FileMeta =
     { FileSha1: string
       FileName: string
       FileSize: int64
@@ -10,11 +11,19 @@ type FileMetaEntity =
       UploadAt: string }
 
 [<AutoOpen>]
-type UserEntity =
+type User =
     { Username: string
       Email: string
-      Phone: int64
+      Phone: string
       SignupAt: string
       LastActiveAt: string
       Status: int }
     
+[<AutoOpen>]
+type UserFile =
+    { UserName: string
+      FileHash: string
+      FileName: string
+      FileSize: Int64
+      UploadAt: string
+      LastUpdated: string }

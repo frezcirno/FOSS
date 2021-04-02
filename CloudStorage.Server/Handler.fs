@@ -50,84 +50,127 @@ type RespMsg<'a> = {
     Data: 'a
 }
 
+let nothingHandler : HttpHandler = Util.apply
 
+let WithToken (handlerNeedToken : (UserTokenBlock -> HttpHandler)) : HttpHandler =
+    try bindModel None handlerNeedToken with
+    | _ -> redirectTo false "/user/signin" 
+           
+let NeedToken : HttpHandler = WithToken (fun _ -> nothingHandler)
+
+/// 用户上传文件
 let FileUploadHandler : HttpHandler =
     fun (next : HttpFunc) (ctx : HttpContext) ->
-        match ctx.Request.HasFormContentType with
-        | false -> RequestErrors.BAD_REQUEST "Bad request" next ctx
-        | true  -> task {
-            for file in ctx.Request.Form.Files do
-                use fileStream = file.OpenReadStream()
-                let fileSha1 = Util.StreamSha1 fileStream
-                use newFile = File.Create ("C:/dev/.net/CloudStorage/CloudStorage.Server/tmp/" + fileSha1)
-                do! file.CopyToAsync newFile
-               
-                let fileMeta =
-                    { FileMetaEntity.FileSha1 = fileSha1
-                      FileName = file.FileName
-                      FileSize = fileStream.Length
-                      Location = newFile.Name
-                      UploadAt = DateTime.Now.ToIsoString() }
-                 
-                Database.CreateFileMeta fileMeta |> ignore
-            return! redirectTo false "/file/upload/suc" next ctx
+        task {
+            let! user = ctx.BindFormAsync<UserTokenBlock> ()
+            match ctx.Request.HasFormContentType with
+            | false -> return! RequestErrors.BAD_REQUEST "Bad request" next ctx
+            | true  ->
+                for file in ctx.Request.Form.Files do
+                    use fileStream = file.OpenReadStream()
+                    let fileSha1 = Util.StreamSha1 fileStream
+                    use newFile = File.Create ("C:/dev/.net/CloudStorage/CloudStorage.Server/tmp/" + fileSha1)
+                    do! file.CopyToAsync newFile
+                     
+                    Database.CreateFileMeta fileSha1 file.FileName fileStream.Length newFile.Name |> ignore
+                    Database.CreateUserFile user.username fileSha1 file.FileName |> ignore
+                
+                return! redirectTo false "/file/upload/suc" next ctx
         }
 
+/// 用户文件元数据查询接口
 let FileMetaHandler : HttpHandler =
     fun (next : HttpFunc) (ctx : HttpContext) ->
         (match ctx.GetQueryStringValue "filehash" with
         | Error msg -> RequestErrors.BAD_REQUEST msg
         | Ok fileHash ->
             match Database.GetFileMetaByHash fileHash with
-            | None -> Successful.NO_CONTENT
+            | None ->
+                json {
+                    RespMsg.Code = -1
+                    Msg = "no such file"
+                    Data = ""
+                }
             | Some fileMeta -> json fileMeta
         ) next ctx
 
+
 let FileQueryHandler : HttpHandler =
-    fun (next : HttpFunc) (ctx : HttpContext) ->
+    WithToken 
+        (fun (userTokenBlock) (next : HttpFunc) (ctx : HttpContext) ->
+            let limit = ctx.TryGetQueryStringValue "limit" |> Option.defaultValue "5" |> Int32.Parse
+            let result = Database.GetLatestFileMetas limit  
+            json {
+                RespMsg.Code = 0
+                Msg = "OK"
+                Data = result
+            } next ctx)
+        
+let UserFileQueryHandler (userTokenBlock) : HttpHandler =
+    (fun (next : HttpFunc) (ctx : HttpContext) ->
         let limit = ctx.TryGetQueryStringValue "limit" |> Option.defaultValue "5" |> Int32.Parse
-        json (Database.GetLatestFileMetas limit) next ctx
+        let result = Database.GetLatestUserFileMetas userTokenBlock.username limit  
+        json {
+            RespMsg.Code = 0
+            Msg = "OK"
+            Data = result
+        } next ctx)
 
+/// 文件下载接口
 let FileDownloadHandler : HttpHandler =
+    bindModel None (fun user ->
     fun (next : HttpFunc) (ctx : HttpContext) ->
-        match ctx.GetQueryStringValue "filehash" with
-        | Result.Error msg -> RequestErrors.BAD_REQUEST msg next ctx
-        | Ok fileHash ->
-            match Database.GetFileMetaByHash fileHash with
-            | None -> RequestErrors.NOT_FOUND "File Not Found" next ctx
-            | Some fileMeta ->
-                streamFile true fileMeta.file_loc None None next ctx
+        task {
+            return!
+                (match ctx.GetQueryStringValue "filehash" with
+                | Result.Error msg -> RequestErrors.BAD_REQUEST msg
+                | Ok fileHash ->
+                    match Database.IsUserHaveFile user.username fileHash with
+                    | false -> RequestErrors.NOT_FOUND "File Not Found"
+                    | true ->
+                        match Database.GetFileMetaByHash fileHash with
+                        | None -> RequestErrors.NOT_FOUND "File Not Found"
+                        | Some fileMeta ->
+                            streamFile true fileMeta.Location None None
+                ) next ctx
+        })
 
+/// 文件更新接口
 let FileUpdateHandler : HttpHandler =
-    tryBindForm RequestErrors.BAD_REQUEST None (fun fileMetaBlock ->
-        if fileMetaBlock.op <> "O" then
-            RequestErrors.METHOD_NOT_ALLOWED ""
-        else 
-            match Database.GetFileMetaByHash fileMetaBlock.filehash with
+    bindModel None (fun user ->
+    tryBindForm RequestErrors.BAD_REQUEST None (fun fileBlock ->
+    if fileBlock.op <> "O" then
+        RequestErrors.METHOD_NOT_ALLOWED ""
+    else 
+        match Database.IsUserHaveFile user.username fileBlock.filehash with
+        | false -> RequestErrors.NOT_FOUND "File Not Found"
+        | true ->
+            match Database.GetFileMetaByHash fileBlock.filehash with
             | None -> RequestErrors.NOT_FOUND "File Not Found"
-            | Some x ->
-                let fileMetaObj = {
-                        FileMetaEntity.FileSha1 = x.file_sha1
-                        FileName = fileMetaBlock.filename
-                        FileSize = x.file_size
-                        Location = x.file_loc
-                        UploadAt = x.create_at.ToIsoString() }
-                Database.UpdateFileMeta fileMetaObj
-                Successful.ok (json fileMetaObj))
-
+            | Some (file : FileMeta) ->
+                let newFile = { file with FileName = fileBlock.filename }
+                Database.UpdateFileMeta newFile.FileSha1 newFile.FileName newFile.FileSize newFile.Location |> ignore
+                Successful.ok (json newFile)))
+        
+/// 文件删除接口
 let FileDeleteHandler : HttpHandler =
+    bindModel None (fun user ->
     fun (next : HttpFunc) (ctx : HttpContext) ->
         (match ctx.GetQueryStringValue "filehash" with
         | Error msg -> RequestErrors.BAD_REQUEST msg
         | Ok fileHash ->
+            match Database.IsUserHaveFile user.username fileHash with
+            | false -> RequestErrors.NOT_FOUND "File Not Found"
+            | true ->
             match Database.GetFileMetaByHash fileHash with
             | None -> Successful.OK "OK"
             | Some fileMeta ->
-                File.Delete fileMeta.file_loc
+                File.Delete fileMeta.Location
                 Database.DeleteFileMeta fileHash |> ignore
                 Successful.OK "OK"
-        ) next ctx
+        ) next ctx)
         
+/// 用户注册接口
 let UserSignupHandler : HttpHandler =
     tryBindForm RequestErrors.BAD_REQUEST None (fun (signupBlock: SignupBlock) ->
         if signupBlock.username.Length < 3 || signupBlock.password.Length < 5 then
@@ -135,21 +178,21 @@ let UserSignupHandler : HttpHandler =
         else
             let enc_password = Util.EncryptPasswd signupBlock.password
             match Database.UserSignup signupBlock.username enc_password with
-            | 0 -> RequestErrors.BAD_REQUEST "Invalid parameter"
-            | _ -> Successful.OK "OK")
+            | false -> RequestErrors.BAD_REQUEST "Invalid parameter"
+            | true -> Successful.OK "OK")
 
-
+/// 用户登录接口
 let UserSigninHandler : HttpHandler =
     tryBindForm RequestErrors.BAD_REQUEST None (fun (signinBlock: SigninBlock) ->
         fun (next : HttpFunc) (ctx : HttpContext) ->
             (let enc_password = Util.EncryptPasswd signinBlock.password
             match Database.UserSignin signinBlock.username enc_password with
             | false -> Successful.OK "FAILED"
-            | true ->   
+            | true ->
                 let token = Util.GenToken signinBlock.username
                 match Database.UserUpdateToken signinBlock.username token with
-                | 0 -> Successful.OK "FAILED"
-                | _ -> 
+                | false -> Successful.OK "FAILED"
+                | true -> 
                     json {
                         RespMsg.Code = 0
                         Msg = "OK"
@@ -160,32 +203,14 @@ let UserSigninHandler : HttpHandler =
                     }
             ) next ctx)
 
-
+/// 查询用户信息接口
 let UserInfoHandler : HttpHandler =
-    bindForm None (fun (userTokenBlock: UserTokenBlock) ->
-        match Database.GetUserByUsername userTokenBlock.username with
-        | None -> id
-        | Some userInfoObj ->
-            json {
-                RespMsg.Code = 0
-                Msg = "OK"
-                Data = {
-                    UserInfoBlock.Username = userInfoObj.user_name
-                    Email = userInfoObj.email
-                    Phone = userInfoObj.phone
-                    SignupAt = userInfoObj.signup_at.ToIsoString()
-                    LastActiveAt = userInfoObj.last_active.ToIsoString()
-                    Status = userInfoObj.status
-                }
-            }
-    )
-        
-let CheckToken : HttpHandler =
-    tryBindForm
-        (fun msg -> RequestErrors.FORBIDDEN "Please Sign In first!")
-        None
-        (fun (userTokenBlock: UserTokenBlock) ->
-            match Util.IsTokenValid userTokenBlock.username userTokenBlock.token with
-            | true -> id
-            | false -> RequestErrors.FORBIDDEN "Please Sign In first!"
-        )
+    bindModel None (fun user ->
+    match Database.GetUserByUsername user.username with
+    | None -> id
+    | Some user ->
+        json {
+            RespMsg.Code = 0
+            Msg = "OK"
+            Data = user
+        })
