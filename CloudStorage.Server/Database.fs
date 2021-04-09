@@ -1,100 +1,47 @@
 ﻿module CloudStorage.Server.Database
 
 open System
-open System.Data
 open Giraffe
-open Giraffe.ComputationExpressions
 open MySqlConnector
 open Dapper
-//open Dapper.FSharp
-//open Dapper.FSharp.MySQL
 
-type Tbl_file =
-    { id : int
-      file_sha1 : string
-      file_name : string
-      file_size : Int64
-      file_loc : string
-      create_at : DateTime
-      update_at : DateTime
-      status : int }
+let conn = new MySqlConnection (Config.datasource)
 
-type Tbl_user =
-    { id : int
-      user_name : string
-      user_pwd : string
-      email : string
-      email_validated : bool
-      phone : string
-      phone_validated : bool
-      signup_at : DateTime
-      last_active : DateTime
-      profile : string
-      status : int }
-
-type Tbl_user_file =
-    { id : int
-      user_name : string
-      file_sha1 : string
-      file_name : string
-      upload_at : DateTime
-      last_update : DateTime
-      status : int }
-
-type Tbl_user_token =
-    { id : int
-      user_name : string
-      user_token : string }
-    
-let firstOrNone = function
-    | [] -> None
-    | x :: _ -> Some x 
-
-let conn = new MySqlConnection "Server=localhost;Database=test;User=root;Password=root"
-
-
-/// <summary>
 /// 向文件表中插入一条新记录
-/// </summary>
-/// <param name="filehash"></param>
-/// <param name="filename"></param>
-/// <param name="filesize"></param>
-/// <param name="fileloc"></param>
-/// <returns>是否成功</returns>
-let CreateFileMeta (filehash : string)
-                   (filename : string)
-                   (filesize : Int64)
-                   (fileloc : string) : bool =
+let CreateFileMeta (file_sha1 : string)
+                   (file_name : string)
+                   (file_size : Int64)
+                   (file_loc : string) : bool =
     let sql = "INSERT IGNORE INTO tbl_file (file_sha1, file_name, file_size, file_loc, status) "
             + "VALUES (@file_sha1, @file_name, @file_size, @file_loc, @status)"
     let param = {|
-        file_sha1 = filehash
-        file_name = filename
-        file_size = filesize
-        file_loc = fileloc
+        file_sha1 = file_sha1
+        file_name = file_name
+        file_size = file_size
+        file_loc = file_loc
         status = 1
     |}
     conn.Execute (sql, param) = 1
     
 /// 更新文件元信息
-let UpdateFileMeta (filehash : string)
-                   (filename : string)
-                   (filesize : Int64)
-                   (fileloc : string) : bool =
+let UpdateFileMeta (file_sha1 : string)
+                   (file_name : string)
+                   (file_size : Int64)
+                   (file_loc : string) : bool =
     let sql = "UPDATE tbl_file SET file_name = @file_name, file_size = @file_size, file_loc = @file_loc "
             + "WHERE file_sha1 = @file_sha1"
     let param = {|
-        file_sha1 = filehash
-        file_name = filename
-        file_size = filesize
-        file_loc = fileloc
+        file_sha1 = file_sha1
+        file_name = file_name
+        file_size = file_size
+        file_loc = file_loc
     |}
     conn.Execute (sql, param) = 1
 
-let DeleteFileMeta (fsha1: string) =
+let DeleteFileMeta (file_sha1: string) =
     let sql = "DELETE FROM tbl_file WHERE file_sha1 = @file_sha1"
     let cmd = new MySqlCommand (sql, conn)
-    cmd.Parameters.AddWithValue("@file_sha1", fsha1) |> ignore
+    cmd.Parameters.AddWithValue("@file_sha1", file_sha1) |> ignore
     cmd.ExecuteNonQuery()
 
 [<CLIMutable>]
@@ -105,17 +52,17 @@ type FileMetaObj = { file_sha1 : string
                      create_at : DateTime }
 
 /// 返回文件信息
-let GetFileMetaByHash (fsha1: string) =
+let GetFileMetaByHash (file_sha1: string) =
     let sql = "SELECT file_sha1, file_name, file_size, file_loc, create_at FROM tbl_file "
             + "WHERE file_sha1 = @file_sha1 AND status = 1 LIMIT 1"
-    conn.Query<FileMetaObj>(sql, {| file_sha1 = fsha1 |})
+    conn.Query<FileMetaObj>(sql, {| file_sha1 = file_sha1 |})
     |> Seq.map (fun (x : FileMetaObj) -> { FileMeta.FileSha1 = x.file_sha1
                                            FileName = x.file_name
                                            FileSize = x.file_size
                                            Location = x.file_loc
                                            UploadAt = x.create_at.ToIsoString() } ) 
     |> List.ofSeq
-    |> firstOrNone
+    |> Util.firstOrNone
 
 
 let GetLatestFileMetas limit =
@@ -146,14 +93,14 @@ let UserSignin (username : string)
     Convert.ToInt32 (conn.ExecuteScalar (sql, param)) = 1
     
 /// 刷新用户token
-let UserUpdateToken (username : string)
-                    (usertoken : string) : bool =
+let UserUpdateToken (user_name : string)
+                    (user_token : string) : bool =
     let sql = "REPLACE INTO tbl_user_token (user_name, user_token) VALUES (@user_name, @user_token)"
     let param = {|
-        user_name = username
-        user_token = usertoken
+        user_name = user_name
+        user_token = user_token
     |}
-    conn.Execute (sql, param) = 1
+    conn.Execute (sql, param) > 0
     
 type UserObj = {
     user_name : string
@@ -178,7 +125,7 @@ let GetUserByUsername (username : string) =
                            LastActiveAt = x.last_active.ToIsoString()
                            Status = x.status })
     |> List.ofSeq
-    |> firstOrNone
+    |> Util.firstOrNone
     
     
 let CheckUserToken username token =
@@ -195,15 +142,15 @@ let CheckUserToken username token =
         
         
 /// 更新用户文件表
-let CreateUserFile (username : string)
-                   (filehash : string)
-                   (filename : string) : bool =
+let CreateUserFile (user_name : string)
+                   (file_sha1 : string)
+                   (file_name : string) : bool =
     let sql = "INSERT IGNORE INTO tbl_user_file (user_name, file_sha1, file_name, upload_at) "
             + "VALUES (@user_name, @file_sha1, @file_name, @upload_at)"
     let param = {|
-        user_name = username
-        file_sha1 = filehash
-        file_name = filename
+        user_name = user_name
+        file_sha1 = file_sha1
+        file_name = file_name
         upload_at = DateTime.Now
     |}
     conn.Execute(sql, param) = 1
@@ -218,13 +165,13 @@ type UserFileObj = { file_sha1 : string
                      last_update : DateTime }
 
 /// 查询用户是否拥有某个文件
-let IsUserHaveFile (username : string)
-                   (fsha1 : string) =
+let IsUserHaveFile (user_name : string)
+                   (file_sha1 : string) =
     let sql = "SELECT count(*) FROM tbl_user_file "
             + "WHERE user_name = @user_name AND file_sha1 = @file_sha1"
     let param = {|
-        user_name = username
-        file_sha1 = fsha1
+        user_name = user_name
+        file_sha1 = file_sha1
     |}
     conn.Execute(sql, param) = 1
 

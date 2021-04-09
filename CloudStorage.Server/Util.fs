@@ -4,19 +4,30 @@ open System
 open System.IO
 open System.Security.Cryptography
 
-let private sha1 = HashAlgorithm.Create("sha1")
-let private md5 = HashAlgorithm.Create("md5")
-let private salt = "frezcirnoisthebest"
-let private tokensalt = "frezcirnolikecoding"
-
 let apply f x = f x
+
 let apply2 x y z = x y z
+
 let wrap x = fun () -> x
+
 let ignore x = fun _ -> x
+
 let skip _ = id
+
 let skip2 _ = skip
+
 let skip3 _ = skip2
+
 let flip f x y = f y x
+
+let firstOrNone = function
+    | [] -> None
+    | x :: _ -> Some x 
+
+
+let private sha1 = new SHA1CryptoServiceProvider()
+
+let private md5 = new MD5CryptoServiceProvider()
 
 let private ByteToHex: (byte [] -> string) =
     Array.fold (fun state x -> state + sprintf "%02X" x) ""
@@ -36,7 +47,7 @@ let StringSha1: (string -> string) =
     >> ByteToHex
 
 
-let EncryptPasswd = flip (+) salt >> StringSha1
+let EncryptPasswd = flip (+) Config.salt >> StringSha1
 
 let GenToken username =
     let ts =
@@ -44,12 +55,12 @@ let GenToken username =
             .ToUnixTimeSeconds()
             .ToString()
 
-    let tokenPrefix = StringMd5(username + ts + tokensalt)
+    let tokenPrefix = StringMd5(username + ts + Config.tokensalt)
     tokenPrefix + ts.[0..7]
 
 let IsTokenValid (username: string) (token: string) =
     token.Length = 40
     &&
     let ts = token.[32..39]
-    let _token = StringMd5(username + ts + tokensalt)
+    let _token = StringMd5(username + ts + Config.tokensalt)
     token.Equals _token

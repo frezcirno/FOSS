@@ -14,12 +14,12 @@ let index =
                         function signin() {
                             let username = document.getElementById('username').value;
                             let password = document.getElementById('password').value;
-                            let formData = new FormData();
-                            formData.append('username', username);
-                            formData.append('password', password);
                             fetch('/user/signin', {
                               method: 'POST',
-                              body: formData
+                              body: new URLSearchParams({
+                                  'username': username,
+                                  'password': password,
+                              })
                             })
                             .then(response => response.json())
                             .then(response => { console.log(response); return response; })
