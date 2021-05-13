@@ -1,0 +1,2 @@
+﻿module CloudStorage.Server.RabbitMq
+

@@ -11,13 +11,6 @@ let errorHandler (ex: Exception) (logger: ILogger) =
     clearResponse
     >=> ServerErrors.internalError (text ex.Message)
 
-let ConfigureLogging (loggerBuilder: ILoggingBuilder) =
-    loggerBuilder
-        .AddFilter(fun lvl -> true)
-        .AddConsole()
-        .AddDebug()
-    |> ignore
-
 
 // 主程序
 [<EntryPoint>]
@@ -26,13 +19,18 @@ let main argv =
     
     Host
         .CreateDefaultBuilder(argv)
+        .ConfigureAppConfiguration(fun config -> ())
         .ConfigureWebHostDefaults(fun webHostBuilder ->
             webHostBuilder
                 .UseStartup<Startup>()
                 .UseKestrel(fun k -> k.AddServerHeader <- false)
             |> ignore)
-        .ConfigureLogging(ConfigureLogging)
+        .ConfigureLogging(fun loggerBuilder -> 
+            loggerBuilder
+                .AddFilter(fun lvl -> true)
+                .AddConsole()
+                .AddDebug()
+            |> ignore)
         .Build()
         .Run()
-
     0

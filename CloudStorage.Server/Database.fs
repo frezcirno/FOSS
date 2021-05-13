@@ -5,7 +5,7 @@ open Giraffe
 open MySqlConnector
 open Dapper
 
-let conn = new MySqlConnection (Config.datasource)
+let conn = new MySqlConnection (Config.Data.datasource)
 
 /// 向文件表中插入一条新记录
 let CreateFileMeta (file_sha1 : string)
@@ -73,8 +73,8 @@ let GetLatestFileMetas limit =
 
 
 /// 用户注册
-let UserSignup (username : string)
-               (enc_pass : string) : bool =
+let UserRegister (username : string)
+                 (enc_pass : string) : bool =
     let sql = "INSERT IGNORE INTO tbl_user (user_name, user_pwd) values (@user_name, @user_pwd)"
     let param = {|
         user_name = username
@@ -83,7 +83,7 @@ let UserSignup (username : string)
     conn.Execute (sql, param) = 1
 
 /// 用户登录
-let UserSignin (username : string)
+let UserLogin (username : string)
                (enc_pass : string) : bool =
     let sql = "SELECT count(*) FROM tbl_user WHERE user_name = @user_name and user_pwd = @user_pwd and status = 1"
     let param = {|
@@ -91,16 +91,6 @@ let UserSignin (username : string)
         user_pwd = enc_pass
     |}
     Convert.ToInt32 (conn.ExecuteScalar (sql, param)) = 1
-    
-/// 刷新用户token
-let UserUpdateToken (user_name : string)
-                    (user_token : string) : bool =
-    let sql = "REPLACE INTO tbl_user_token (user_name, user_token) VALUES (@user_name, @user_token)"
-    let param = {|
-        user_name = user_name
-        user_token = user_token
-    |}
-    conn.Execute (sql, param) > 0
     
 type UserObj = {
     user_name : string

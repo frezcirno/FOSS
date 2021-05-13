@@ -1,13 +1,29 @@
-﻿namespace CloudStorage.Server
+﻿module CloudStorage.Server.Config
 
-module Config = 
-    let env = System.Environment.GetEnvironmentVariables()
-    let OSSEndpoint = env.["OSSENDPOINT"] :?> string
-    let OSSAccessKeyId = env.["OSSACCESSKEYID"] :?> string
-    let OSSAccessKeySecret = env.["OSSACCESSKEYSECRET"] :?> string
-    let OSSBucket = "fcirno-test"
-    let salt = env.["SALT"] :?> string
-    let tokensalt = env.["TOKENSALT"] :?> string
-    let datasource = "Server=localhost;Database=test;User=root;Password=root"
-    let redishost = "localhost"
-    let redispass = "root"
+let private env = System.Environment.GetEnvironmentVariables()
+
+let Oss = {|
+    Endpoint = env.["OSSENDPOINT"] :?> string
+    AccessKeyId = env.["OSSACCESSKEYID"] :?> string
+    AccessKeySecret = env.["OSSACCESSKEYSECRET"] :?> string
+    Bucket = "fcirno-test"
+|}
+let Security = {|
+    Salt = env.["SALT"] :?> string
+    Tokensalt = env.["TOKENSALT"] :?> string
+|}
+let Data = {|
+    datasource = "Server=localhost;Database=test;User=root;Password=root"
+|}
+let Redis = {|
+    Host = "localhost"
+    Pass = "root"
+|}
+let Rabbit = {|
+    AsyncTransferEnable = true
+    RabbitURL = "amqp://guest:guest@127.0.0.1:5672/"
+    TransExchangeName = "uploadserver.trans"
+    TransOssQueueName = "uploadserver.trans.oss"
+    TransOssErrQueueName = "uploadserver.trans.oss.err"
+    TransOssRoutingKey = "oss"
+|}

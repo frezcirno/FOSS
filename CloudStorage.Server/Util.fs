@@ -47,7 +47,7 @@ let StringSha1: (string -> string) =
     >> ByteToHex
 
 
-let EncryptPasswd = flip (+) Config.salt >> StringSha1
+let EncryptPasswd = flip (+) Config.Security.Salt >> StringSha1
 
 let GenToken username =
     let ts =
@@ -55,12 +55,12 @@ let GenToken username =
             .ToUnixTimeSeconds()
             .ToString()
 
-    let tokenPrefix = StringMd5(username + ts + Config.tokensalt)
+    let tokenPrefix = StringMd5(username + ts + Config.Security.Tokensalt)
     tokenPrefix + ts.[0..7]
 
 let IsTokenValid (username: string) (token: string) =
     token.Length = 40
     &&
     let ts = token.[32..39]
-    let _token = StringMd5(username + ts + Config.tokensalt)
+    let _token = StringMd5(username + ts + Config.Security.Tokensalt)
     token.Equals _token

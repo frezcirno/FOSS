@@ -12,6 +12,7 @@
     <Compile Include="Util.fs" />
     <Compile Include="Redis.fs" />
     <Compile Include="Database.fs" />
+    <Compile Include="RabbitMq.fs" />
     <Compile Include="Oss.fs" />
     <Compile Include="Handler.fs" />
     <Compile Include="Router.fs" />
@@ -26,5 +27,8 @@
     <PackageReference Include="mysqlconnector" Version="1.3.2" />
     <PackageReference Update="FSharp.Core" Version="5.0.1" />
     <PackageReference Include="StackExchange.Redis" Version="2.2.4" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="appsettings.json" />
   </ItemGroup>
 </Project>

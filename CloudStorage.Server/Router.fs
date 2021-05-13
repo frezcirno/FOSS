@@ -7,25 +7,32 @@ let routes : HttpHandler =
     choose [
         route "/" >=> htmlView Views.index
         route "/ping" >=> Successful.OK "pong!"
+        route "/auth/ping" >=> Handler.cookieAuthorized >=> Successful.OK "pong!"
         route "/time" >=> warbler (fun _ -> text (DateTime.Now.ToString()))
-        route "/nothing" >=> setBody (System.Text.Encoding.ASCII.GetBytes "Hello!")
+        route "/test" >=> RequestErrors.UNAUTHORIZED "" "" ""
         
         route "/file/upload" >=> choose [
             GET >=> htmlView Views.upload
             POST >=> Handler.FileUploadHandler
         ]
         route "/file/upload/suc" >=> Successful.OK "Upload finished!"
-        route "/file/meta" >=> Handler.NeedToken >=> Handler.FileMetaHandler
-        route "/file/query" >=> Handler.NeedToken >=> Handler.FileQueryHandler
-        route "/file/download" >=> Handler.NeedToken >=> Handler.FileDownloadHandler
-        route "/file/update" >=> Handler.NeedToken >=> Handler.FileUpdateHandler
-        route "/file/delete" >=> Handler.NeedToken >=> Handler.FileDeleteHandler
+        route "/file/meta" >=> Handler.cookieAuthorized >=> Handler.FileMetaHandler
+        route "/file/query" >=> Handler.cookieAuthorized >=> Handler.FileQueryHandler
+        route "/file/download" >=> Handler.cookieAuthorized >=> Handler.FileDownloadHandler
+        route "/file/update" >=> Handler.cookieAuthorized >=> Handler.FileUpdateHandler
+        route "/file/delete" >=> Handler.cookieAuthorized >=> Handler.FileDeleteHandler
         
-        route "/file/fastupload" >=> Handler.NeedToken >=> Handler.TryFastUploadHandler
+        route "/file/fastupload" >=> Handler.cookieAuthorized >=> Handler.TryFastUploadHandler
         
-        route "/user/signup" >=> Handler.UserSignupHandler
-        route "/user/signin" >=> Handler.UserSigninHandler
-        route "/user/info" >=> Handler.NeedToken >=> Handler.UserInfoHandler
+        route "/user/signup" >=> choose [
+            GET >=> htmlView Views.signup
+            POST >=> Handler.UserRegister
+        ]
+        route "/user/signin" >=> choose [
+            GET >=> htmlView Views.signin
+            POST >=> Handler.UserLogin
+        ]
+        route "/user/info" >=> Handler.cookieAuthorized >=> Handler.UserInfoHandler
   
         route "/file/mpupload/init" >=> Handler.InitMultipartUploadHandler
         route "/file/mpupload/uppart" >=> Handler.UploadPartHandler
@@ -33,5 +40,7 @@ let routes : HttpHandler =
         route "/file/mpupload/cancel" >=> Handler.CancelUploadPartHandler
         route "/file/mpupload/status" >=> Handler.MultipartUploadStatusHandler
             
+        route "/error" >=> htmlView Views.error
+           
         RequestErrors.notFound (text "Not Found")
     ]
