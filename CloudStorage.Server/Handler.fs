@@ -4,6 +4,8 @@ open System
 open System.IO
 open System.Security.Claims
 open FSharp.Control.Tasks.V2.ContextInsensitive
+open Microsoft.AspNetCore.Authentication.Cookies
+open Microsoft.AspNetCore.Authentication.JwtBearer
 open Microsoft.AspNetCore.Http
 open Giraffe
 open StackExchange.Redis
@@ -56,15 +58,16 @@ let WithToken (innerHandler: UserTokenBlock -> HttpHandler) : HttpHandler =
         None
         innerHandler
 
-let notLoggedIn =
+let notLoggedIn : HttpHandler =
     RequestErrors.UNAUTHORIZED "Cookie" "SAFE Realm" "You must be logged in."
 
 let jwtAuthorized : HttpHandler =
-    requiresAuthentication (challenge "Bearer")
+    requiresAuthentication (challenge JwtBearerDefaults.AuthenticationScheme)
 
 
 let cookieAuthorized : HttpHandler =
-    requiresAuthentication (challenge "Cookies")
+    requiresAuthentication (challenge CookieAuthenticationDefaults.AuthenticationScheme)
+
 
 
 /// 用户上传文件
@@ -247,13 +250,15 @@ let UserLogin : HttpHandler =
                 let token = Util.GenToken username
 
                 if Redis.UserUpdateToken username token then
-                    let identity = ClaimsIdentity("Cookies")
+                    let identity =
+                        ClaimsIdentity(CookieAuthenticationDefaults.AuthenticationScheme)
+
                     identity.AddClaim(Claim("user", username))
                     identity.AddClaim(Claim("token", token))
                     identity.AddClaim(Claim("role", "user"))
 
                     let principal = ClaimsPrincipal(identity)
-                    do! ctx.SignInAsync(principal)
+                    do! ctx.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal)
 
                     return!
                         jsonResp
