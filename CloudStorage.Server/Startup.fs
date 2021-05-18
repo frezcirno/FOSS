@@ -1,19 +1,16 @@
 namespace CloudStorage.Server
 
+open CloudStorage.Server
 open System
+open System.Text
 open Microsoft.AspNetCore.Builder
-open Microsoft.AspNetCore.Hosting
-open Microsoft.AspNetCore.Identity
-open Microsoft.AspNetCore.Authentication
-open Microsoft.AspNetCore.Authentication.Cookies
 open Microsoft.AspNetCore.Authentication.JwtBearer
-open Microsoft.AspNetCore.Authorization
-open Microsoft.AspNetCore.Http
 open Microsoft.Extensions.Configuration
 open Microsoft.Extensions.DependencyInjection
 open Microsoft.Extensions.Hosting
 open Microsoft.Extensions.Logging
 open Giraffe
+open Microsoft.IdentityModel.Tokens
 
 type Startup(configuration: IConfiguration) =
     member _.Configuration = configuration
@@ -25,21 +22,26 @@ type Startup(configuration: IConfiguration) =
 
         services
             .AddAuthentication(fun opt ->
-                opt.DefaultScheme <- CookieAuthenticationDefaults.AuthenticationScheme
-                opt.DefaultAuthenticateScheme <- CookieAuthenticationDefaults.AuthenticationScheme
-                opt.DefaultSignInScheme <- CookieAuthenticationDefaults.AuthenticationScheme
-                opt.DefaultChallengeScheme <- CookieAuthenticationDefaults.AuthenticationScheme)
-            .AddCookie(fun opt ->
-                opt.Cookie.Name <- "Cookies"
-                opt.LoginPath <- PathString "/user/signin"
-                opt.LogoutPath <- PathString "/user/signout"
-                opt.ExpireTimeSpan <- TimeSpan.FromHours(1.0))
+                opt.DefaultScheme <- JwtBearerDefaults.AuthenticationScheme
+                opt.DefaultAuthenticateScheme <- JwtBearerDefaults.AuthenticationScheme
+                opt.DefaultSignInScheme <- JwtBearerDefaults.AuthenticationScheme
+                opt.DefaultChallengeScheme <- JwtBearerDefaults.AuthenticationScheme)
+            //            .AddCookie(fun opt ->
+//                opt.Cookie.Name <- "Cookies"
+//                opt.LoginPath <- PathString "/user/signin"
+//                opt.LogoutPath <- PathString "/user/signout"
+//                opt.ExpireTimeSpan <- TimeSpan.FromHours(1.0))
             .AddJwtBearer(fun opt ->
-                opt.Audience <- "http://localhost:5001/"
-                opt.Authority <- "http://localhost:5000/"
-                opt.SaveToken <- true)
+                opt.Audience <- "api"
+                opt.RequireHttpsMetadata <- false
+                //                opt.TokenValidationParameters <- TokenValidationParameters()
+                opt.TokenValidationParameters.IssuerSigningKey <-
+                    SymmetricSecurityKey(Encoding.ASCII.GetBytes Config.Security.Secret)
+
+                opt.TokenValidationParameters.ValidIssuer <- "http://7c00h.xyz/cloud"
+                opt.SaveToken <- false)
         |> ignore
-        
+
         services.AddGiraffe() |> ignore
 
     // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.

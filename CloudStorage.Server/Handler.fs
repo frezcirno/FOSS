@@ -2,15 +2,18 @@
 
 open System
 open System.IO
+open System.IdentityModel.Tokens.Jwt
 open System.Security.Claims
+open System.Text
+open System.Threading.Tasks
 open FSharp.Control.Tasks.V2.ContextInsensitive
 open Microsoft.AspNetCore.Authentication.Cookies
 open Microsoft.AspNetCore.Authentication.JwtBearer
 open Microsoft.AspNetCore.Http
 open Giraffe
+open Microsoft.IdentityModel.JsonWebTokens
+open Microsoft.IdentityModel.Tokens
 open StackExchange.Redis
-open CloudStorage.Server
-open CloudStorage.Server.Oss
 open Microsoft.AspNetCore.Authentication
 
 [<CLIMutable>]
@@ -64,173 +67,178 @@ let notLoggedIn : HttpHandler =
 let jwtAuthorized : HttpHandler =
     requiresAuthentication (challenge JwtBearerDefaults.AuthenticationScheme)
 
-
 let cookieAuthorized : HttpHandler =
     requiresAuthentication (challenge CookieAuthenticationDefaults.AuthenticationScheme)
 
+type UploadBlock =
+    { FileName: string
+      FileSize: int64
+      content: string }
 
+let private InnerFileUpload (fileHash: string) (fileName: string) (fileLength: Int64) (stream: Stream) =
+    task {
+        if Database.File.FileHashExists fileHash then
+            return true
+        else
+            stream.Seek(0L, SeekOrigin.Begin) |> ignore
+            do! Storage.putObject fileHash stream
+            return Database.File.CreateFileMeta fileHash fileName fileLength fileHash
+    }
 
 /// 用户上传文件
 let FileUploadHandler : HttpHandler =
     fun (next: HttpFunc) (ctx: HttpContext) ->
         task {
-            let! user = ctx.BindFormAsync<UserTokenBlock>()
+            let username = ctx.User.FindFirstValue ClaimTypes.Name
 
-            match ctx.Request.HasFormContentType with
-            | false -> return! RequestErrors.BAD_REQUEST "Bad request" next ctx
-            | true ->
-                for file in ctx.Request.Form.Files do
-                    use fileStream = file.OpenReadStream()
-                    let fileSha1 = Util.StreamSha1 fileStream
+            if ctx.Request.Form.Files.Count = 1 then
+                let file = ctx.Request.Form.Files.[0]
 
-                    use newFile =
-                        File.Create(
-                            "C:/dev/.net/CloudStorage/CloudStorage.Server/tmp/"
-                            + fileSha1
-                        )
+                let stream = file.OpenReadStream()
+                let fileHash = Util.StreamSha1 stream
 
-                    do! file.CopyToAsync newFile
+                let! saveResult = InnerFileUpload fileHash file.Name file.Length stream
 
-                    match putObject fileSha1 fileStream with
-                    | Error ex -> ()
-                    | Ok _ ->
-                        Database.CreateFileMeta fileSha1 file.FileName fileStream.Length newFile.Name
-                        |> ignore
-
-                        Database.CreateUserFile user.username fileSha1 file.FileName
-                        |> ignore
-
-                return! redirectTo false "/file/upload/suc" next ctx
+                if saveResult then
+                    if Database.UserFile.CreateUserFile username fileHash file.FileName then
+                        return! jsonResp 0 "ok" null next ctx
+                    else
+                        return! ServerErrors.SERVICE_UNAVAILABLE "CreateUserFile" next ctx
+                else
+                    return! ServerErrors.SERVICE_UNAVAILABLE "saveResult" next ctx
+            else
+                return! RequestErrors.BAD_REQUEST "Bad request" next ctx
         }
 
-/// 用户文件元数据查询接口
+/// 文件元数据查询接口
 let FileMetaHandler : HttpHandler =
     fun (next: HttpFunc) (ctx: HttpContext) ->
-        (match ctx.GetQueryStringValue "filehash" with
-         | Error msg -> RequestErrors.BAD_REQUEST msg
-         | Ok fileHash ->
-             match Database.GetFileMetaByHash fileHash with
-             | None -> Successful.ok (jsonResp -1 "no such file" "")
-             | Some fileMeta -> Successful.ok (json fileMeta))
-            next
-            ctx
+        match ctx.GetQueryStringValue "filehash" with
+        | Error msg -> RequestErrors.BAD_REQUEST msg next ctx
+        | Ok fileHash ->
+            match Database.File.GetFileMetaByHash fileHash with
+            | None -> jsonResp 0 "ok" [] next ctx
+            | Some fileMeta -> jsonResp 0 "ok" fileMeta next ctx
 
+/// 最近上传文件查询接口
+let RecentFileHandler : HttpHandler =
+    fun (next: HttpFunc) (ctx: HttpContext) ->
+        let username = ctx.User.FindFirstValue ClaimTypes.Name
 
-let FileQueryHandler : HttpHandler =
-    WithToken
-        (fun userTokenBlock (next: HttpFunc) (ctx: HttpContext) ->
-            let limit =
-                Int32.Parse(
-                    ctx.TryGetQueryStringValue "limit"
-                    |> Option.defaultValue "5"
-                )
+        let page =
+            ctx.TryGetQueryStringValue "page"
+            |> Option.defaultValue "0"
+            |> Int32.Parse
 
-            let result = Database.GetLatestFileMetas limit
-            Successful.ok (jsonResp 0 "OK" result) next ctx)
-
-let UserFileQueryHandler (userTokenBlock) : HttpHandler =
-    (fun (next: HttpFunc) (ctx: HttpContext) ->
         let limit =
             ctx.TryGetQueryStringValue "limit"
             |> Option.defaultValue "5"
             |> Int32.Parse
 
         let result =
-            Database.GetLatestUserFileMetas userTokenBlock.username limit
+            Database.UserFile.GetUserFiles username page limit
 
-        Successful.ok (jsonResp 0 "OK" result) next ctx)
+        jsonResp 0 "OK" result next ctx
+
+/// 用户文件查询接口
+let UserFileQueryHandler : HttpHandler =
+    fun (next: HttpFunc) (ctx: HttpContext) ->
+        let username = ctx.User.FindFirstValue ClaimTypes.Name
+
+        let limit =
+            ctx.TryGetQueryStringValue "limit"
+            |> Option.defaultValue "5"
+            |> Int32.Parse
+
+        let result =
+            Database.UserFile.GetUserFiles username limit
+
+        jsonResp 0 "OK" result next ctx
 
 /// 文件下载接口
+/// 用户登录之后根据 filename 下载文件
 let FileDownloadHandler : HttpHandler =
-    bindModel
-        None
-        (fun user (next: HttpFunc) (ctx: HttpContext) ->
-            task {
-                return!
-                    (match ctx.GetQueryStringValue "filehash" with
-                     | Result.Error msg -> RequestErrors.BAD_REQUEST msg
-                     | Ok fileHash ->
-                         match Database.IsUserHaveFile user.username fileHash with
-                         | false -> RequestErrors.NOT_FOUND "File Not Found"
-                         | true ->
-                             match Database.GetFileMetaByHash fileHash with
-                             | None -> RequestErrors.NOT_FOUND "File Not Found"
-                             | Some fileMeta -> Successful.ok (streamFile true fileMeta.Location None None))
-                        next
-                        ctx
-            })
+    fun (next: HttpFunc) (ctx: HttpContext) ->
+        let username = ctx.User.FindFirstValue ClaimTypes.Name
+
+        match ctx.GetQueryStringValue "filename" with
+        | Ok fileName ->
+            match Database.UserFile.GetUserFileByFileName username fileName with
+            | Some userFile ->
+                match Database.File.GetFileMetaByHash userFile.FileHash with
+                | Some fileMeta -> streamData true (Storage.getObject fileMeta.FileLoc) None None next ctx
+                | _ -> RequestErrors.NOT_FOUND "File Not Found" next ctx
+            | _ -> RequestErrors.NOT_FOUND "File Not Found" next ctx
+        | Result.Error msg -> RequestErrors.BAD_REQUEST msg next ctx
 
 /// 文件更新接口
+/// 用户登录之后通过此接口修改文件元信息
 let FileUpdateHandler : HttpHandler =
-    bindModel
-        None
-        (fun user ->
-            tryBindForm
-                RequestErrors.BAD_REQUEST
-                None
-                (fun fileBlock ->
-                    if fileBlock.op <> "O" then
-                        RequestErrors.METHOD_NOT_ALLOWED ""
-                    else
-                        match Database.IsUserHaveFile user.username fileBlock.filehash with
-                        | false -> RequestErrors.NOT_FOUND "File Not Found"
-                        | true ->
-                            match Database.GetFileMetaByHash fileBlock.filehash with
-                            | None -> RequestErrors.NOT_FOUND "File Not Found"
-                            | Some (file: FileMeta) ->
-                                let newFile =
-                                    { file with
-                                          FileName = fileBlock.filename }
+    fun (next: HttpFunc) (ctx: HttpContext) ->
+        let username = ctx.User.FindFirstValue ClaimTypes.Name
 
-                                Database.UpdateFileMeta
-                                    newFile.FileSha1
-                                    newFile.FileName
-                                    newFile.FileSize
-                                    newFile.Location
-                                |> ignore
+        let fileName =
+            ctx.GetFormValue "filename"
+            |> Option.defaultValue ""
 
-                                Successful.ok (json newFile)))
+        let op =
+            ctx.GetFormValue "op" |> Option.defaultValue ""
+
+        if op = "rename" then
+            match ctx.GetFormValue "newname" with
+            | Some newName ->
+                if
+                    newName.Length <> 0
+                    && not (Database.UserFile.IsUserHaveFile username newName)
+                then
+                    match Database.UserFile.GetUserFileByFileName username fileName with
+                    | Some userFile ->
+                        let newUserFile = { userFile with FileName = newName }
+
+                        if Database.UserFile.UpdateUserFileByUserFile username fileName newUserFile then
+                            json newUserFile next ctx
+                        else
+                            ServerErrors.SERVICE_UNAVAILABLE "" next ctx
+                    | _ -> RequestErrors.NOT_FOUND "File Not Found" next ctx
+                else
+                    RequestErrors.BAD_REQUEST "invalid newname" next ctx
+            | _ -> RequestErrors.BAD_REQUEST "newname is needed" next ctx
+        else
+            ServerErrors.NOT_IMPLEMENTED "NOT_IMPLEMENTED" next ctx
 
 /// 文件删除接口
+/// 用户登录之后根据 filename 删除文件
 let FileDeleteHandler : HttpHandler =
-    bindModel
-        None
-        (fun user (next: HttpFunc) (ctx: HttpContext) ->
-            (match ctx.GetQueryStringValue "filehash" with
-             | Error msg -> RequestErrors.BAD_REQUEST msg
-             | Ok fileHash ->
-                 match Database.IsUserHaveFile user.username fileHash with
-                 | false -> RequestErrors.NOT_FOUND "File Not Found"
-                 | true ->
-                     match Database.GetFileMetaByHash fileHash with
-                     | None -> Successful.ok (jsonResp 0 "ok" "")
-                     | Some fileMeta ->
-                         File.Delete fileMeta.Location
-                         Database.DeleteFileMeta fileHash |> ignore
-                         Successful.ok (jsonResp 0 "ok" ""))
-                next
-                ctx)
+    fun (next: HttpFunc) (ctx: HttpContext) ->
+        let username = ctx.User.FindFirstValue ClaimTypes.Name
+
+        match ctx.GetQueryStringValue "filename" with
+        | Error msg -> RequestErrors.BAD_REQUEST msg next ctx
+        | Ok fileName ->
+            match Database.UserFile.GetUserFileByFileName username fileName with
+            | Some userFile ->
+                if Database.UserFile.DeleteUserFileByFileName username fileName then
+                    jsonResp 0 "ok" "" next ctx
+                else
+                    ServerErrors.SERVICE_UNAVAILABLE "" next ctx
+            | _ -> RequestErrors.NOT_FOUND "File Not Found" next ctx
 
 /// 用户注册接口
 let UserRegister : HttpHandler =
     fun (next: HttpFunc) (ctx: HttpContext) ->
-        let username =
-            ctx.GetFormValue "username"
-            |> Option.defaultValue ""
-
-        let password =
-            ctx.GetFormValue "password"
-            |> Option.defaultValue ""
-
-        if username.Length < 3 || password.Length < 5 then
-            RequestErrors.BAD_REQUEST "Invalid parameter" next ctx
-        else
-            let enc_password = Util.EncryptPasswd password
-
-            if Database.UserRegister username enc_password then
-                Successful.ok (jsonResp 0 "ok" "") next ctx
-            else
+        match ctx.GetFormValue "username", ctx.GetFormValue "password" with
+        | Some username, Some password ->
+            if username.Length < 3 || password.Length < 5 then
                 RequestErrors.BAD_REQUEST "Invalid parameter" next ctx
+            else
+                let enc_password = Util.EncryptPasswd password
+
+                if Database.User.UserRegister username enc_password then
+                    jsonResp 0 "ok" "" next ctx
+                else
+                    RequestErrors.BAD_REQUEST "Invalid parameter" next ctx
+
+        | _ -> RequestErrors.BAD_REQUEST "Invalid parameter" next ctx
 
 /// 用户登录接口
 let UserLogin : HttpHandler =
@@ -246,31 +254,54 @@ let UserLogin : HttpHandler =
 
             let enc_password = Util.EncryptPasswd password
 
-            if Database.UserLogin username enc_password then
-                let token = Util.GenToken username
+            if Database.User.UserLogin username enc_password then
 
-                if Redis.UserUpdateToken username token then
-                    let identity =
-                        ClaimsIdentity(CookieAuthenticationDefaults.AuthenticationScheme)
+                let tokenHandler = JwtSecurityTokenHandler()
+                let tokenDescriptor = SecurityTokenDescriptor()
 
-                    identity.AddClaim(Claim("user", username))
-                    identity.AddClaim(Claim("token", token))
-                    identity.AddClaim(Claim("role", "user"))
+                tokenDescriptor.Subject <-
+                    ClaimsIdentity(
+                        [| Claim(JwtRegisteredClaimNames.Aud, "api")
+                           Claim(JwtRegisteredClaimNames.Iss, "http://7c00h.xyz/cloud")
+                           Claim(ClaimTypes.Name, username) |],
+                        JwtBearerDefaults.AuthenticationScheme
+                    )
 
-                    let principal = ClaimsPrincipal(identity)
-                    do! ctx.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal)
+                tokenDescriptor.Expires <- DateTime.UtcNow.AddHours(1.0)
+
+                tokenDescriptor.SigningCredentials <-
+                    SigningCredentials(
+                        SymmetricSecurityKey(Encoding.ASCII.GetBytes Config.Security.Secret),
+                        SecurityAlgorithms.HmacSha256Signature
+                    )
+
+                let securityToken = tokenHandler.CreateToken tokenDescriptor
+                let writeToken = tokenHandler.WriteToken securityToken
+
+
+                if Redis.UserUpdateToken username writeToken then
+                    //                    let identity =
+//                        ClaimsIdentity(
+//                            [| Claim("user", username)
+//                               Claim("token", token)
+//                               Claim("role", "user") |],
+//                            JwtBearerDefaults.AuthenticationScheme
+//                        )
+//
+//                    let principal = ClaimsPrincipal(identity)
+//                    do! ctx.SignInAsync(JwtBearerDefaults.AuthenticationScheme, principal)
 
                     return!
                         jsonResp
                             0
                             "OK"
-                            {| Location =
+                            {| FileLoc =
                                    ctx.Request.Scheme
                                    + "://"
                                    + ctx.Request.Host.Value
                                    + "/"
                                Username = username
-                               Token = token |}
+                               AccessToken = writeToken |}
                             next
                             ctx
                 else
@@ -287,14 +318,14 @@ let UserLogout : HttpHandler =
             return! redirectTo false "/" next ctx
         }
 
-/// 查询用户信息接口
+/// 用户信息查询接口
 let UserInfoHandler : HttpHandler =
-    bindModel
-        None
-        (fun user ->
-            match Database.GetUserByUsername user.username with
-            | None -> id
-            | Some user -> jsonResp 0 "OK" user)
+    fun (next: HttpFunc) (ctx: HttpContext) ->
+        let username = ctx.User.FindFirstValue ClaimTypes.Name
+
+        match Database.User.GetUserByUsername username with
+        | None -> ServerErrors.INTERNAL_ERROR "User not found" next ctx
+        | Some user -> jsonResp 0 "OK" user next ctx
 
 [<CLIMutable>]
 type FastUploadBlock =
@@ -308,10 +339,13 @@ let TryFastUploadHandler : HttpHandler =
         RequestErrors.BAD_REQUEST
         None
         (fun fastUploadBlock ->
-            match Database.GetFileMetaByHash fastUploadBlock.filehash with
+            match Database.File.GetFileMetaByHash fastUploadBlock.filehash with
             | None -> Successful.ok (jsonResp -1 "秒传失败，请访问普通上传接口" "")
             | Some file ->
-                match Database.CreateUserFile fastUploadBlock.username fastUploadBlock.filehash fastUploadBlock.filename with
+                match Database.UserFile.CreateUserFile
+                          fastUploadBlock.username
+                          fastUploadBlock.filehash
+                          fastUploadBlock.filename with
                 | true -> Successful.ok (jsonResp -1 "秒传失败，请访问普通上传接口" "")
                 | false -> Successful.ok (jsonResp -2 "秒传失败" ""))
 
@@ -430,8 +464,8 @@ let CompleteUploadPartHandler : HttpHandler =
             if totalCount <> chunkCount then
                 Successful.ok (jsonResp -2 "invalid request" null)
             else
-                Database.CreateFileMeta cpPart.filehash cpPart.filename (Convert.ToInt64 cpPart.filesize) ""
-                Database.CreateUserFile cpPart.username cpPart.filehash cpPart.filename
+                Database.File.CreateFileMeta cpPart.filehash cpPart.filename (Convert.ToInt64 cpPart.filesize) ""
+                Database.UserFile.CreateUserFile cpPart.username cpPart.filehash cpPart.filename
                 Successful.ok (jsonResp 0 "OK" null))
 
 let CancelUploadPartHandler : HttpHandler = id

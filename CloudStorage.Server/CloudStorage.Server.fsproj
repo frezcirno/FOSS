@@ -7,13 +7,12 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="Config.fs" />
-    <Compile Include="Views.fs" />
-    <Compile Include="Common.fs" />
     <Compile Include="Util.fs" />
     <Compile Include="Redis.fs" />
     <Compile Include="Database.fs" />
     <Compile Include="RabbitMq.fs" />
     <Compile Include="Oss.fs" />
+    <Compile Include="Storage.fs" />
     <Compile Include="Handler.fs" />
     <Compile Include="Router.fs" />
     <Compile Include="Startup.fs" />
@@ -30,5 +29,11 @@
   </ItemGroup>
   <ItemGroup>
     <Content Include="appsettings.json" />
+    <Content Include="static\common.css" />
+    <Content Include="static\error.html" />
+    <Content Include="static\index.html" />
+    <Content Include="static\signin.html" />
+    <Content Include="static\signup.html" />
+    <Content Include="static\upload.html" />
   </ItemGroup>
 </Project>

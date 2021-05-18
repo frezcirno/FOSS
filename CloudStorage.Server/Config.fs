@@ -9,6 +9,7 @@ let Oss = {|
     Bucket = "fcirno-test"
 |}
 let Security = {|
+    Secret = env.["SECRET"] :?> string
     Salt = env.["SALT"] :?> string
     Tokensalt = env.["TOKENSALT"] :?> string
 |}

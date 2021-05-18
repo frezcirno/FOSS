@@ -15,8 +15,8 @@ let errorHandler (ex: Exception) (logger: ILogger) =
 // 主程序
 [<EntryPoint>]
 let main argv =
-    Dapper.FSharp.OptionTypes.register()
-    
+    Dapper.FSharp.OptionTypes.register ()
+
     Host
         .CreateDefaultBuilder(argv)
         .ConfigureAppConfiguration(fun config -> ())
@@ -25,7 +25,7 @@ let main argv =
                 .UseStartup<Startup>()
                 .UseKestrel(fun k -> k.AddServerHeader <- false)
             |> ignore)
-        .ConfigureLogging(fun loggerBuilder -> 
+        .ConfigureLogging(fun loggerBuilder ->
             loggerBuilder
                 .AddFilter(fun lvl -> true)
                 .AddConsole()
@@ -33,4 +33,5 @@ let main argv =
             |> ignore)
         .Build()
         .Run()
+
     0
