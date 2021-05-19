@@ -5,7 +5,7 @@ open System.IO
 open System.IdentityModel.Tokens.Jwt
 open System.Security.Claims
 open System.Text
-open System.Threading.Tasks
+open CloudStorage.Storage
 open FSharp.Control.Tasks.V2.ContextInsensitive
 open Microsoft.AspNetCore.Authentication.Cookies
 open Microsoft.AspNetCore.Authentication.JwtBearer
@@ -81,7 +81,7 @@ let private InnerFileUpload (fileHash: string) (fileName: string) (fileLength: I
             return true
         else
             stream.Seek(0L, SeekOrigin.Begin) |> ignore
-            do! Storage.putObject fileHash stream
+            do! Storage.putObjectAsync fileHash stream
             return Database.File.CreateFileMeta fileHash fileName fileLength fileHash
     }
 

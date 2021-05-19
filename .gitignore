@@ -1,7 +1,8 @@
-﻿/.idea/
-/CloudStorage.Server/bin/Debug/net5.0/
-/CloudStorage.Server/obj/
-/CloudStorage.Server/tmp/
+﻿.idea/
+Debug/
+bin/
+obj/
+tmp/
 
 .fake
 .ionide

@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+message ServerMsg {
+    // addr of zeromq
+    string zmq_host = 1;
+    string zmq_port = 2;
+
+    // data for disk space
+    uint64 total_space = 3;
+    uint64 available_space = 4;
+
+    // host to interact with http file 
+    string http_port = 5;
+}

@@ -17,6 +17,8 @@ let errorHandler (ex: Exception) (logger: ILogger) =
 let main argv =
     Dapper.FSharp.OptionTypes.register ()
 
+    Zk.main ()
+
     Host
         .CreateDefaultBuilder(argv)
         .ConfigureAppConfiguration(fun config -> ())
