@@ -15,10 +15,3 @@ let putObjectAsync (key: string) (stream: Stream) =
 /// 获取
 let getObject (key: string) : Stream =
     File.OpenRead(Path.Join [| StoragePath; key |]) :> Stream
-
-
-let putObjectBytes (key: string) (bytes: byte []) =
-    let filePath = Path.Join [| StoragePath; key |]
-    use newFile = File.Create(filePath)
-    newFile.Write(bytes, 0, bytes.Length)
-    newFile

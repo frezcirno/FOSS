@@ -1,10 +1,21 @@
 ﻿module CloudStorage.Storage.Config
 
-let private env = System.Environment.GetEnvironmentVariables()
+open System
 
-let Oss = {|
-    Endpoint = env.["OSSENDPOINT"] :?> string
-    AccessKeyId = env.["OSSACCESSKEYID"] :?> string
-    AccessKeySecret = env.["OSSACCESSKEYSECRET"] :?> string
-    Bucket = "fcirno-test"
-|}
+let private GetEnv = Environment.GetEnvironmentVariable
+
+let Oss =
+    {| Endpoint = GetEnv "OSSENDPOINT"
+       AccessKeyId = GetEnv "OSSACCESSKEYID"
+       AccessKeySecret = GetEnv "OSSACCESSKEYSECRET"
+       Bucket = "fcirno-test" |}
+
+let Redis =
+    "localhost:6379,password=root,abortConnect=false"
+
+let Data =
+    {| datasource = "Server=localhost;Database=storage;User=root;Password=root" |}
+
+let ZK_NODE_PREFIX = "/storage"
+
+let STORAGE_PATH = "C:/tmp/"

@@ -1,6 +1,7 @@
 ﻿module CloudStorage.Server.Database
 
 open System
+open CloudStorage.Common
 open Giraffe
 open MySqlConnector
 open Dapper
@@ -10,14 +11,14 @@ let conn =
 
 module File =
     type FileMeta =
-        { FileHash: String
-          FileName: String
-          FileSize: Int64
-          FileLoc: String
+        { FileHash: string
+          FileName: string
+          FileSize: int64
+          FileLoc: string
           CreateAt: DateTime }
 
     /// 向文件表中插入一条新记录
-    let CreateFileMeta (file_hash: string) (file_name: string) (file_size: Int64) (file_loc: string) : bool =
+    let CreateFileMeta (file_hash: string) (file_name: string) (file_size: int64) (file_loc: string) : bool =
         let sql =
             "INSERT INTO tbl_file (file_hash, file_name, file_size, file_loc, status) "
             + "VALUES (@file_hash, @file_name, @file_size, @file_loc, @status)"
@@ -32,7 +33,7 @@ module File =
         conn.Execute(sql, param) = 1
 
     /// 更新文件元信息
-    let UpdateFileMeta (file_hash: string) (file_name: string) (file_size: Int64) (file_loc: string) : bool =
+    let UpdateFileMeta (file_hash: string) (file_name: string) (file_size: int64) (file_loc: string) : bool =
         let sql =
             "UPDATE tbl_file SET file_name = @file_name, file_size = @file_size, file_loc = @file_loc "
             + "WHERE file_hash = @file_hash"
@@ -79,7 +80,7 @@ module File =
 
         conn.Query<FileMeta>(sql, {| file_hash = file_hash |})
         |> List.ofSeq
-        |> Util.firstOrNone
+        |> Utils.firstOrNone
 
     /// 存在文件哈希
     let FileHashExists (file_hash: string) =
@@ -117,7 +118,7 @@ module User =
         conn.Execute(sql, param) = 1
 
     /// 用户登录
-    let UserLogin (username: string) (enc_pass: string) : bool =
+    let GetUserByUsernameAndUserPwd (username: string) (enc_pass: string) : bool =
         let sql =
             "SELECT count(*) FROM tbl_user WHERE user_name = @user_name and user_pwd = @user_pwd and status = 1"
 
@@ -136,7 +137,7 @@ module User =
 
         conn.Query<User>(sql, param)
         |> List.ofSeq
-        |> Util.firstOrNone
+        |> Utils.firstOrNone
 
     ///
     let CheckUserToken username token =
@@ -199,7 +200,7 @@ module UserFile =
                user_name = username |}
         )
         |> List.ofSeq
-        |> Util.firstOrNone
+        |> Utils.firstOrNone
 
     /// 获取用户近期文件元信息列表
     let GetUserFiles (username: string) (page: int) (limit: int) =

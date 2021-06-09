@@ -4,5 +4,8 @@ bin/
 obj/
 tmp/
 
-.fake
-.ionide
+.fake/
+.ionide/
+.vscode/
+.vs/
+tools/

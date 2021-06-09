@@ -1,25 +1,46 @@
 ﻿module CloudStorage.Server.Config
 
-let private env = System.Environment.GetEnvironmentVariables()
+open System
 
 
-let Security = {|
-    Secret = env.["SECRET"] :?> string
-    Salt = env.["SALT"] :?> string
-    Tokensalt = env.["TOKENSALT"] :?> string
-|}
-let Data = {|
-    datasource = "Server=localhost;Database=test;User=root;Password=root"
-|}
-let Redis = {|
-    Host = "localhost"
-    Pass = "root"
-|}
-let Rabbit = {|
-    AsyncTransferEnable = true
-    RabbitURL = "amqp://guest:guest@127.0.0.1:5672/"
-    TransExchangeName = "uploadserver.trans"
-    TransOssQueueName = "uploadserver.trans.oss"
-    TransOssErrQueueName = "uploadserver.trans.oss.err"
-    TransOssRoutingKey = "oss"
-|}
+let private GetEnv (key: string) (def: string) =
+    let envs = Environment.GetEnvironmentVariables()
+
+    if envs.Contains key then
+        string envs.[key]
+    else
+        def
+
+let AliyunOss =
+    {| Endpoint = GetEnv "OSS_ENDPOINT" "test"
+       AccessKeyId = GetEnv "OSS_ACCESS_KEY_ID" "test"
+       AccessKeySecret = GetEnv "OSS_ACCESS_KEY_SECRET" "test"
+       Bucket = "fcirno-test" |}
+
+let Minio =
+    {| Endpoint = "localhost:9000"
+       AccessKey = "test"
+       SecretKey = "test"
+       Bucket = "test" |}
+
+let Security =
+    {| Secret = GetEnv "SECRET" "frezcirnoisthebest"
+       Salt = GetEnv "SALT" "test"
+       Tokensalt = GetEnv "TOKENSALT" "test" |}
+
+let Data =
+    {| datasource = "Server=localhost;Database=test;User=root;Password=root" |}
+
+let Redis =
+    "localhost:6379,password=root,abortConnect=false"
+
+let Rabbit =
+    {| AsyncTransferEnable = true
+       RabbitURL = "amqp://guest:guest@127.0.0.1:5672/"
+       TransExchangeName = "uploadserver.trans"
+       TransOssQueueName = "uploadserver.trans.oss"
+       TransOssErrQueueName = "uploadserver.trans.oss.err"
+       TransOssRoutingKey = "oss" |}
+
+let CHUNK_SIZE = 50 * 1024 * 1024
+let TEMP_FILE_PATH = "tmp/"
