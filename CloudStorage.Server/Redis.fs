@@ -7,6 +7,12 @@ let private redisOption = ConfigurationOptions.Parse Config.Redis
 let private redisConn =
     ConnectionMultiplexer.Connect(redisOption)
 
-let redis = redisConn.GetDatabase()
+let redis =
+    let redis = redisConn.GetDatabase(0)
+    printfn "Redis: %f" (redis.Ping().TotalSeconds)
+    redis
 
-redis.Ping() |> ignore
+let redis1 =
+    let redis1 = redisConn.GetDatabase(1)
+    printfn "Redis1: %f" (redis1.Ping().TotalSeconds)
+    redis1

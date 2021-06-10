@@ -20,6 +20,8 @@ open CloudStorage.Server.Redis
 open StackExchange.Redis
 open Microsoft.AspNetCore.Authentication
 
+open CloudStorage.Server.MinioOss
+//open CloudStorage.Server.AliyunOss
 
 let ArgumentError (err: string) = RequestErrors.BAD_REQUEST err
 
@@ -62,7 +64,7 @@ let private SaveFileAsync (fileHash: string) (fileName: string) (fileLength: int
         if Database.File.FileHashExists fileHash then
             return true
         else
-            do! MinioOss.putObjectAsync fileHash stream
+            do! putObjectAsync fileHash stream
             return Database.File.CreateFileMeta fileHash fileName fileLength fileHash
     }
 
@@ -147,7 +149,9 @@ let FileDownloadHandler (next: HttpFunc) (ctx: HttpContext) =
             /// 获取文件
             match Database.File.GetFileMetaByHash userFile.FileHash with
             | None -> RequestErrors.NOT_FOUND "File Not Found" next ctx
-            | Some fileMeta -> streamData true (Storage.getObject fileMeta.FileLoc) None None next ctx
+            | Some fileMeta ->
+                use data = getObject fileMeta.FileLoc
+                streamData true data None None next ctx
 
 /// 文件更新接口
 /// 用户登录之后通过此接口修改文件元信息
@@ -503,8 +507,8 @@ let routes : HttpHandler =
              >=> UserInfoHandler
 
              route "/file/upload"
-             >=> choose [ GET >=> RequestErrors.METHOD_NOT_ALLOWED id
-                          POST >=> jwtAuthorized >=> FileUploadHandler ]
+             >=> choose [ POST >=> jwtAuthorized >=> FileUploadHandler
+                          RequestErrors.METHOD_NOT_ALLOWED id ]
              route "/file/meta"
              >=> jwtAuthorized
              >=> FileMetaHandler

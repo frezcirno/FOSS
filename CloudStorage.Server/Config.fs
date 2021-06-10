@@ -19,8 +19,8 @@ let AliyunOss =
 
 let Minio =
     {| Endpoint = "localhost:9000"
-       AccessKey = "test"
-       SecretKey = "test"
+       AccessKey = "admin"
+       SecretKey = "password"
        Bucket = "test" |}
 
 let Security =
@@ -32,7 +32,7 @@ let Data =
     {| datasource = "Server=localhost;Database=test;User=root;Password=root" |}
 
 let Redis =
-    "localhost:6379,password=root,abortConnect=false"
+    "localhost:16379,password=root,abortConnect=false"
 
 let Rabbit =
     {| AsyncTransferEnable = true
