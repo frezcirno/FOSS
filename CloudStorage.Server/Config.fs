@@ -32,7 +32,7 @@ let Data =
     {| datasource = "Server=localhost;Database=test;User=root;Password=root" |}
 
 let Redis =
-    "localhost:16379,password=root,abortConnect=false"
+    "127.0.0.1:16379,password=root,abortConnect=false"
 
 let Rabbit =
     {| AsyncTransferEnable = true
@@ -42,5 +42,16 @@ let Rabbit =
        TransOssErrQueueName = "uploadserver.trans.oss.err"
        TransOssRoutingKey = "oss" |}
 
-let CHUNK_SIZE = 50 * 1024 * 1024
+let CHUNK_SIZE = 5 * 1024 * 1024
 let TEMP_FILE_PATH = "tmp/"
+
+///
+/// 每个分块文件：
+/// HASH_KEY_PREFIX + hash -> uploadId
+/// UPLOAD_INFO_KEY_PREFIX + uploadId -> {  }
+/// CHUNK_KEY_PREFIX + uploadId -> [  ]
+///
+let HASH_KEY_PREFIX = "hash_"
+
+let UPLOAD_INFO_KEY_PREFIX = "upid_"
+let CHUNK_KEY_PREFIX = "ckid_"

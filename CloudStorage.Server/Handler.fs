@@ -4,7 +4,6 @@ open System
 open System.IO
 open System.IdentityModel.Tokens.Jwt
 open System.Security.Claims
-open System.Security.Cryptography
 open System.Text
 open System.Threading.Tasks
 open CloudStorage.Common
@@ -68,8 +67,6 @@ let private SaveFileAsync (fileHash: string) (fileName: string) (fileLength: int
             return Database.File.CreateFileMeta fileHash fileName fileLength fileHash
     }
 
-
-
 /// 用户上传文件
 let FileUploadHandler (next: HttpFunc) (ctx: HttpContext) =
     task {
@@ -86,7 +83,7 @@ let FileUploadHandler (next: HttpFunc) (ctx: HttpContext) =
             let! saveResult = SaveFileAsync fileHash file.Name file.Length stream
 
             if saveResult then
-                if Database.UserFile.CreateUserFile username fileHash file.FileName then
+                if Database.UserFile.CreateUserFile username fileHash file.FileName file.Length then
                     return! okResp "OK" null next ctx
                 else
                     return! ServerErrors.SERVICE_UNAVAILABLE "CreateUserFile" next ctx
@@ -98,11 +95,11 @@ let FileUploadHandler (next: HttpFunc) (ctx: HttpContext) =
 
 /// 文件元数据查询接口
 let FileMetaHandler (next: HttpFunc) (ctx: HttpContext) =
-    match ctx.GetQueryStringValue "fileHash" with
+    match ctx.GetQueryStringValue "fileName" with
     | Error msg -> ArgumentError msg next ctx
-    | Ok fileHash ->
-        match Database.File.GetFileMetaByHash fileHash with
-        | None -> okResp "OK" [] next ctx
+    | Ok fileName ->
+        match Database.File.GetFileMetaByFileName fileName with
+        | None -> RequestErrors.notFound id next ctx
         | Some fileMeta -> okResp "OK" fileMeta next ctx
 
 [<CLIMutable>]
@@ -298,8 +295,7 @@ let UserInfoHandler (next: HttpFunc) (ctx: HttpContext) =
 
 [<CLIMutable>]
 type FastUploadInitBlock =
-    { username: string
-      fileHash: string
+    { fileHash: string
       fileName: string
       fileSize: int64 }
 
@@ -308,6 +304,8 @@ type FastUploadInitBlock =
 ///
 let TryFastUploadHandler (next: HttpFunc) (ctx: HttpContext) =
     task {
+        let username = ctx.User.FindFirstValue ClaimTypes.Name
+
         match! ctx.TryBindFormAsync<FastUploadInitBlock>() with
         | Error msg -> return! ArgumentError msg next ctx
         | Ok initBlock ->
@@ -315,17 +313,14 @@ let TryFastUploadHandler (next: HttpFunc) (ctx: HttpContext) =
             if not (Database.File.FileHashExists initBlock.fileHash) then
                 return! jsonResp -1 "秒传失败，请访问普通上传接口" null next ctx
             /// 尝试秒传
-            else if Database.UserFile.CreateUserFile initBlock.username initBlock.fileHash initBlock.fileName then
+            else if Database.UserFile.CreateUserFile username initBlock.fileHash initBlock.fileName initBlock.fileSize then
                 return! okResp "OK" null next ctx
             else
                 return! ServerErrors.SERVICE_UNAVAILABLE "秒传服务暂不可用，请访问普通上传接口" next ctx
     }
 
 [<CLIMutable>]
-type MultipartUploadBlock =
-    { username: string
-      fileHash: string
-      fileSize: int64 }
+type MultipartUploadBlock = { fileHash: string; fileSize: int64 }
 
 [<CLIMutable>]
 type MultipartInfo =
@@ -333,61 +328,93 @@ type MultipartInfo =
       FileSize: int64
       UploadId: string
       ChunkSize: int
-      ChunkCount: int }
+      ChunkCount: int
+      ChunkExists: int [] }
 
 ///
 /// 初始化文件分块上传接口
 ///
 let InitMultipartUploadHandler (next: HttpFunc) (ctx: HttpContext) =
     task {
+        let username = ctx.User.FindFirstValue ClaimTypes.Name
+
         match! ctx.TryBindFormAsync<MultipartUploadBlock>() with
         | Error msg -> return! ArgumentError msg next ctx
         | Ok args ->
-            let mpInfo =
+            let uploadId =
+                /// 如果 HASH_KEY_PREFIX + hash -> uploadId 存在，说明是断点续传
+                let key =
+                    RedisKey(Config.HASH_KEY_PREFIX + args.fileHash)
+
+                match redis.KeyExists key with
+                /// 不存在则创建一个新的
+                | false -> Utils.StringSha1(username + args.fileHash + Guid().ToString())
+                | true -> redis.StringGet(key).ToString()
+
+            /// 存在则获取chunk info
+            let chunks =
+                redis.ListRange(RedisKey(Config.CHUNK_KEY_PREFIX + uploadId))
+                |> Array.map int
+
+            let ret =
                 { FileHash = args.fileHash
                   FileSize = args.fileSize
-                  UploadId = Utils.StringSha1(args.username + args.fileHash + Guid().ToString())
+                  UploadId = uploadId
                   ChunkSize = Config.CHUNK_SIZE
                   ChunkCount =
                       float args.fileSize / float Config.CHUNK_SIZE
                       |> ceil
-                      |> int }
+                      |> int
+                  ChunkExists = chunks }
 
-            /// 每个文件的所有part记录在一个hashmap中
-            let mpKey = RedisKey("MP_" + mpInfo.UploadId)
+            ///
+            /// 如果没有已经上传的chunk, 说明是第一次上传
+            /// 初始化断点信息到redis
+            ///
+            if chunks.Length = 0 then
+                let fPath =
+                    Path.Join [| Config.TEMP_FILE_PATH
+                                 uploadId |]
 
-            redis.HashSet(mpKey, RedisValue("chunkCount"), RedisValue(string mpInfo.ChunkCount))
-            |> ignore
+                Directory.CreateDirectory fPath |> ignore
 
-            redis.HashSet(mpKey, RedisValue("fileHash"), RedisValue(mpInfo.FileHash))
-            |> ignore
+                let mpKey =
+                    RedisKey(Config.UPLOAD_INFO_KEY_PREFIX + ret.UploadId)
 
-            redis.HashSet(mpKey, RedisValue("fileSize"), RedisValue(string mpInfo.FileSize))
-            |> ignore
+                redis.HashSet(mpKey, RedisValue("chunkCount"), RedisValue(string ret.ChunkCount))
+                |> ignore
 
-            redis.KeyExpire(mpKey, TimeSpan.FromHours(12.0))
-            |> ignore
+                redis.HashSet(mpKey, RedisValue("fileHash"), RedisValue(ret.FileHash))
+                |> ignore
 
-            //            redis.StringSet()
+                redis.HashSet(mpKey, RedisValue("fileSize"), RedisValue(string ret.FileSize))
+                |> ignore
 
-            return! okResp "OK" mpInfo next ctx
+                redis.KeyExpire(mpKey, TimeSpan.FromHours(12.0))
+                |> ignore
+
+                redis.StringSet(
+                    RedisKey(Config.HASH_KEY_PREFIX + ret.FileHash),
+                    RedisValue(ret.UploadId),
+                    TimeSpan.FromHours(12.0)
+                )
+                |> ignore
+
+            return! okResp "OK" ret next ctx
     }
 
 [<CLIMutable>]
-type UploadPartBlock =
-    { username: string
-      uploadId: string
-      index: int }
+type UploadPartBlock = { uploadId: string; index: int }
 
 ///
 /// 上传一个分片
 ///
 let UploadPartHandler (next: HttpFunc) (ctx: HttpContext) =
     task {
-        match! ctx.TryBindFormAsync<UploadPartBlock>() with
+        match ctx.TryBindQueryString<UploadPartBlock>() with
         | Error msg -> return! ArgumentError msg next ctx
         | Ok partInfo ->
-            use body = ctx.Request.Body
+            let data = ctx.Request.Body
 
             /// 将分片保存到 TEMP/upId/index
             let fPath =
@@ -397,44 +424,42 @@ let UploadPartHandler (next: HttpFunc) (ctx: HttpContext) =
 
             Directory.GetParent(fPath).Create()
             use chunk = File.Create fPath
-            do! body.CopyToAsync chunk
+            do! data.CopyToAsync chunk
 
-            /// 每一个分片完成就在hashmap中添加一项
-            let mpKey = RedisKey("MP_" + partInfo.uploadId)
+            ///
+            /// 每一个分片完成就在 CHUNK_KEY_PREFIX + uploadId -> [  ] 中添加一项 CHUNK_PREFIX + index
+            ///
+            let chunkKey =
+                RedisKey(Config.CHUNK_KEY_PREFIX + partInfo.uploadId)
 
-            Redis.redis.HashSet(mpKey, RedisValue("chkidx_" + string partInfo.index), RedisValue(string 1))
-            |> ignore
+            let isExist =
+                redis.ListRange chunkKey
+                |> Array.exists (fun v -> (int v) = partInfo.index)
+
+            if not isExist then
+                redis.ListRightPush(chunkKey, RedisValue(string partInfo.index))
+                |> ignore
 
             return! okResp "OK" None next ctx
     }
 
-let AppendStream (os: Stream) (is: Stream) : Task<Stream> =
-    task {
-        do! is.CopyToAsync os
-        return os
-    }
+let MergeParts (fPath: string) (chunkCount: int) =
+    let stream = new MemoryStream()
 
-let MergePartsAsync (fPath: string) (chunkCount: int) : Task<Stream> =
-    use stream = new MemoryStream()
+    [ 0 .. chunkCount - 1 ]
+    |> List.iter
+        (fun (index: int) ->
+            use file =
+                File.OpenRead(Path.Join [| fPath; string index |])
 
-    let output =
-        [ 0 .. chunkCount ]
-        |> List.fold
-            (fun (os: Task<Stream>) (index: int) ->
-                os.ContinueWith
-                    (fun (task: Task<Stream>) ->
-                        use file =
-                            File.OpenRead(Path.Join [| fPath; string index |])
+            file.CopyTo stream)
 
-                        (AppendStream task.Result file).Result))
-            (Task.FromResult(stream :> Stream))
-
-    output
+    stream.Seek(0L, SeekOrigin.Begin) |> ignore
+    stream
 
 [<CLIMutable>]
 type CompletePartBlock =
     { uploadId: string
-      username: string
       fileHash: string
       fileSize: int64
       fileName: string }
@@ -444,25 +469,18 @@ type CompletePartBlock =
 ///
 let CompleteUploadPartHandler (next: HttpFunc) (ctx: HttpContext) =
     task {
+        let username = ctx.User.FindFirstValue ClaimTypes.Name
+
         match! ctx.TryBindFormAsync<CompletePartBlock>() with
         | Error msg -> return! ArgumentError msg next ctx
         | Ok args ->
-            let data =
-                Redis.redis.HashGetAll(RedisKey("MP_" + args.uploadId))
-
             let totalCount =
-                let count =
-                    data
-                    |> Array.find (fun entry -> entry.Name.ToString() = "chunkcount")
-
-                int count.Value
+                redis.HashGet(RedisKey(Config.UPLOAD_INFO_KEY_PREFIX + args.uploadId), RedisValue("chunkCount"))
+                |> int
 
             let uploadCount =
-                let count =
-                    data
-                    |> Array.filter (fun entry -> entry.Name.ToString().StartsWith "chkidx_")
-
-                count.Length
+                redis.ListLength(RedisKey(Config.CHUNK_KEY_PREFIX + args.uploadId))
+                |> int
 
             if totalCount <> uploadCount then
                 return! jsonResp -2 "invalid request" null next ctx
@@ -472,21 +490,107 @@ let CompleteUploadPartHandler (next: HttpFunc) (ctx: HttpContext) =
                     Path.Join [| Config.TEMP_FILE_PATH
                                  args.uploadId |]
 
-                let! mergeStream = MergePartsAsync fPath totalCount
+                use mergeStream = MergeParts fPath totalCount
 
-                let! saveRes = SaveFileAsync args.fileHash args.fileName args.fileSize mergeStream
+                let! saveFileResult = SaveFileAsync args.fileHash args.fileName args.fileSize mergeStream
 
-                if not saveRes then
+                if not saveFileResult then
                     return! ServerErrors.SERVICE_UNAVAILABLE "CreateFileMeta" next ctx
-                else if not (Database.UserFile.CreateUserFile args.username args.fileHash args.fileName) then
+                elif not (Database.UserFile.CreateUserFile username args.fileHash args.fileName args.fileSize) then
                     return! ServerErrors.SERVICE_UNAVAILABLE "CreateUserFile" next ctx
                 else
+
+                    let hashKey =
+                        RedisKey(Config.HASH_KEY_PREFIX + args.fileHash)
+
+                    if redis.KeyExists hashKey then
+                        let uploadId = redis.StringGet(hashKey).ToString()
+
+                        let fPath =
+                            Path.Join [| Config.TEMP_FILE_PATH
+                                         uploadId |]
+
+                        Directory.Delete(fPath, true)
+
+                        redis.KeyDelete(hashKey) |> ignore
+
+                        redis.KeyDelete(RedisKey(Config.UPLOAD_INFO_KEY_PREFIX + uploadId))
+                        |> ignore
+
+                        redis.KeyDelete(RedisKey(Config.CHUNK_KEY_PREFIX + uploadId))
+                        |> ignore
+
                     return! okResp "OK" null next ctx
     }
 
-let CancelUploadPartHandler : HttpHandler = id
+let CancelUploadPartHandler (next: HttpFunc) (ctx: HttpContext) =
+    task {
+        match ctx.GetFormValue "fileHash" with
+        | None -> return! ArgumentError "fileHash" next ctx
+        | Some fileHash ->
+            let hashKey =
+                RedisKey(Config.HASH_KEY_PREFIX + fileHash)
 
-let MultipartUploadStatusHandler : HttpHandler = id
+            if not (redis.KeyExists hashKey) then
+                return! okResp "Nothing found" null next ctx
+            else
+                let uploadId = redis.StringGet(hashKey).ToString()
+
+                let fPath =
+                    Path.Join [| Config.TEMP_FILE_PATH
+                                 uploadId |]
+
+                Directory.Delete(fPath, true)
+
+                redis.KeyDelete(hashKey) |> ignore
+
+                redis.KeyDelete(RedisKey(Config.UPLOAD_INFO_KEY_PREFIX + uploadId))
+                |> ignore
+
+                redis.KeyDelete(RedisKey(Config.CHUNK_KEY_PREFIX + uploadId))
+                |> ignore
+
+                return! okResp "OK" "Success delete" next ctx
+    }
+
+let MultipartUploadStatusHandler (next: HttpFunc) (ctx: HttpContext) =
+    task {
+        match ctx.GetFormValue "fileHash" with
+        | None -> return! ArgumentError "file hash is needed" next ctx
+        | Some fileHash ->
+            let hashKey =
+                RedisKey(Config.HASH_KEY_PREFIX + fileHash)
+
+            if not (redis.KeyExists hashKey) then
+                return! RequestErrors.notFound id next ctx
+            else
+                let uploadId = redis.StringGet(hashKey).ToString()
+
+                let chunks =
+                    redis.ListRange(RedisKey(Config.CHUNK_KEY_PREFIX + uploadId))
+                    |> Array.map (fun x -> x.ToString() |> int)
+
+                let mpKey =
+                    RedisKey(Config.UPLOAD_INFO_KEY_PREFIX + uploadId)
+
+                let ret =
+                    { FileHash = fileHash
+                      FileSize =
+                          redis
+                              .HashGet(mpKey, RedisValue("fileSize"))
+                              .ToString()
+                          |> int64
+                      UploadId = uploadId
+                      ChunkSize = Config.CHUNK_SIZE
+                      ChunkCount =
+                          redis
+                              .HashGet(mpKey, RedisValue("chunkCount"))
+                              .ToString()
+                          |> int
+                      ChunkExists = chunks }
+
+                return! okResp "OK" ret next ctx
+    }
 
 let routes : HttpHandler =
     choose [ route "/" >=> htmlFile "static/index.html"

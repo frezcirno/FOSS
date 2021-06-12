@@ -82,6 +82,16 @@ module File =
         |> List.ofSeq
         |> Utils.firstOrNone
 
+    /// 返回文件信息
+    let GetFileMetaByFileName (file_name: string) =
+        let sql =
+            "SELECT file_hash as FileHash, file_name as FileName, file_size as FileSize, file_loc as FileLoc, create_at as CreateAt FROM tbl_file "
+            + "WHERE file_name = @file_name AND status = 1 LIMIT 1"
+
+        conn.Query<FileMeta>(sql, {| file_name = file_name |})
+        |> List.ofSeq
+        |> Utils.firstOrNone
+
     /// 存在文件哈希
     let FileHashExists (file_hash: string) =
         match GetFileMetaByHash file_hash with
@@ -159,19 +169,21 @@ module UserFile =
         { UserName: string
           FileHash: string
           FileName: string
+          FileSize: int64
           UploadAt: DateTime
           LastActive: DateTime }
 
     /// 更新用户文件表
-    let CreateUserFile (user_name: string) (file_hash: string) (file_name: string) : bool =
+    let CreateUserFile (user_name: string) (file_hash: string) (file_name: string) (file_size: int64) : bool =
         let sql =
-            "INSERT INTO tbl_user_file (user_name, file_hash, file_name, upload_at) "
-            + "VALUES (@user_name, @file_hash, @file_name, @upload_at)"
+            "INSERT INTO tbl_user_file (user_name, file_hash, file_name, file_size, upload_at) "
+            + "VALUES (@user_name, @file_hash, @file_name, @file_size, @upload_at)"
 
         let param =
             {| user_name = user_name
                file_hash = file_hash
                file_name = file_name
+               file_size = file_size
                upload_at = DateTime.Now |}
 
         conn.Execute(sql, param) = 1
@@ -191,7 +203,7 @@ module UserFile =
     /// 用户文件信息查询
     let GetUserFileByFileName (username: string) (fileName: string) =
         let sql =
-            "SELECT user_name as UserName, file_hash as FileHash, file_name as FileName, upload_at as UploadAt, last_active as LastActive FROM tbl_user_file "
+            "SELECT user_name as UserName, file_hash as FileHash, file_name as FileName, file_size as FileSize, upload_at as UploadAt, last_active as LastActive FROM tbl_user_file "
             + "WHERE user_name = @user_name AND file_name = @file_name AND status = 1 LIMIT 1"
 
         conn.Query<UserFile>(
@@ -205,7 +217,7 @@ module UserFile =
     /// 获取用户近期文件元信息列表
     let GetUserFiles (username: string) (page: int) (limit: int) =
         let sql =
-            "SELECT user_name as UserName, file_hash as FileHash, file_name as FileName, upload_at as UploadAt, last_active as LastActive FROM tbl_user_file "
+            "SELECT user_name as UserName, file_hash as FileHash, file_name as FileName, file_size as FileSize, upload_at as UploadAt, last_active as LastActive FROM tbl_user_file "
             + "WHERE user_name = @user_name ORDER BY upload_at DESC LIMIT @limit OFFSET @offset"
 
         let param =
