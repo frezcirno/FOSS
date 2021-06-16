@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+message RabbitMsg {
+  string FileHash = 1;
+  string CurLocation = 2;
+  string DstLocation = 3;
+  enum DstType {
+    MINIO = 0;
+    CEPH = 1;
+    ALIYUN = 2;
+  };
+}

@@ -5,6 +5,7 @@
     </PropertyGroup>
 
     <ItemGroup>
+      <Content Include="RabbitMsg.proto" />
       <Content Include="ServerMsg.proto" />
     </ItemGroup>
 

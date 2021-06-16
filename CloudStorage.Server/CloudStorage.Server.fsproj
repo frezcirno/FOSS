@@ -25,6 +25,7 @@
     <PackageReference Include="mysqlconnector" Version="1.3.9" />
     <PackageReference Update="FSharp.Core" Version="5.0.1" />
     <PackageReference Include="NetMQ" Version="4.0.1.6" />
+    <PackageReference Include="RabbitMQ.Client" Version="6.2.1" />
     <PackageReference Include="StackExchange.Redis" Version="2.2.4" />
     <PackageReference Include="ZooKeeperNetEx" Version="3.4.12.4" />
   </ItemGroup>
@@ -40,6 +41,5 @@
   <ItemGroup>
     <ProjectReference Include="..\CloudStorage.Common\CloudStorage.Common.fsproj" />
     <ProjectReference Include="..\CloudStorage.Message\CloudStorage.Message.csproj" />
-    <ProjectReference Include="..\CloudStorage.Storage\CloudStorage.Storage.fsproj" />
   </ItemGroup>
 </Project>
