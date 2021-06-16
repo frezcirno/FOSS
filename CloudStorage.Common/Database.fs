@@ -1,8 +1,7 @@
-﻿module CloudStorage.Server.Database
+﻿module CloudStorage.Common.Database
 
 open System
 open CloudStorage.Common
-open Giraffe
 open MySqlConnector
 open Dapper
 
@@ -33,7 +32,7 @@ module File =
         conn.Execute(sql, param) = 1
 
     /// 更新文件元信息
-    let UpdateFileMeta (file_hash: string) (file_name: string) (file_size: int64) (file_loc: string) : bool =
+    let UpdateFileMetaByHash (file_hash: string) (file_name: string) (file_size: int64) (file_loc: string) : bool =
         let sql =
             "UPDATE tbl_file SET file_name = @file_name, file_size = @file_size, file_loc = @file_loc "
             + "WHERE file_hash = @file_hash"
@@ -46,8 +45,20 @@ module File =
 
         conn.Execute(sql, param) = 1
 
+    /// 更新文件位置
+    let UpdateFileLocByHash (file_hash: string) (file_loc: string) : bool =
+        let sql =
+            "UPDATE tbl_file SET file_loc = @file_loc "
+            + "WHERE file_hash = @file_hash"
+
+        let param =
+            {| file_hash = file_hash
+               file_loc = file_loc |}
+
+        conn.Execute(sql, param) = 1
+
     /// 更新文件元信息
-    let UpdateFileMetaByFileMeta (fileMeta: FileMeta) : bool =
+    let UpdateFileMetaByHashUseFileMeta (fileMeta: FileMeta) : bool =
         let sql =
             "UPDATE tbl_file SET file_name = @file_name, file_size = @file_size, file_loc = @file_loc "
             + "WHERE file_hash = @file_hash"

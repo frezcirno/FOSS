@@ -1,4 +1,4 @@
-﻿module CloudStorage.Server.Redis
+﻿module CloudStorage.Common.Redis
 
 open StackExchange.Redis
 

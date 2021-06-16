@@ -1,4 +1,4 @@
-﻿module CloudStorage.Server.Zmq
+﻿module CloudStorage.Common.Zmq
 
 open NetMQ
 open NetMQ.Sockets

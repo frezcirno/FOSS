@@ -22,14 +22,14 @@ public static partial class RabbitMsgReflection {
   static RabbitMsgReflection() {
     byte[] descriptorData = global::System.Convert.FromBase64String(
         string.Concat(
-          "Cg9SYWJiaXRNc2cucHJvdG8icwoJUmFiYml0TXNnEhAKCEZpbGVIYXNoGAEg",
-          "ASgJEhMKC0N1ckxvY2F0aW9uGAIgASgJEhMKC0RzdExvY2F0aW9uGAMgASgJ",
-          "IioKB0RzdFR5cGUSCQoFTUlOSU8QABIICgRDRVBIEAESCgoGQUxJWVVOEAJi",
-          "BnByb3RvMw=="));
+          "Cg9SYWJiaXRNc2cucHJvdG8imAEKCVJhYmJpdE1zZxIQCghmaWxlSGFzaBgB",
+          "IAEoCRITCgtjdXJMb2NhdGlvbhgCIAEoCRITCgtkc3RMb2NhdGlvbhgDIAEo",
+          "CRIjCgdkc3RUeXBlGAQgASgOMhIuUmFiYml0TXNnLkRzdFR5cGUiKgoHRHN0",
+          "VHlwZRIJCgVNSU5JTxAAEggKBENFUEgQARIKCgZBTElZVU4QAmIGcHJvdG8z"));
     descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
         new pbr::FileDescriptor[] { },
         new pbr::GeneratedClrTypeInfo(null, null, new pbr::GeneratedClrTypeInfo[] {
-          new pbr::GeneratedClrTypeInfo(typeof(global::RabbitMsg), global::RabbitMsg.Parser, new[]{ "FileHash", "CurLocation", "DstLocation" }, null, new[]{ typeof(global::RabbitMsg.Types.DstType) }, null, null)
+          new pbr::GeneratedClrTypeInfo(typeof(global::RabbitMsg), global::RabbitMsg.Parser, new[]{ "FileHash", "CurLocation", "DstLocation", "DstType" }, null, new[]{ typeof(global::RabbitMsg.Types.DstType) }, null, null)
         }));
   }
   #endregion
@@ -68,6 +68,7 @@ public sealed partial class RabbitMsg : pb::IMessage<RabbitMsg>
     fileHash_ = other.fileHash_;
     curLocation_ = other.curLocation_;
     dstLocation_ = other.dstLocation_;
+    dstType_ = other.dstType_;
     _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
   }
 
@@ -76,7 +77,7 @@ public sealed partial class RabbitMsg : pb::IMessage<RabbitMsg>
     return new RabbitMsg(this);
   }
 
-  /// <summary>Field number for the "FileHash" field.</summary>
+  /// <summary>Field number for the "fileHash" field.</summary>
   public const int FileHashFieldNumber = 1;
   private string fileHash_ = "";
   [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -87,7 +88,7 @@ public sealed partial class RabbitMsg : pb::IMessage<RabbitMsg>
     }
   }
 
-  /// <summary>Field number for the "CurLocation" field.</summary>
+  /// <summary>Field number for the "curLocation" field.</summary>
   public const int CurLocationFieldNumber = 2;
   private string curLocation_ = "";
   [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -98,7 +99,7 @@ public sealed partial class RabbitMsg : pb::IMessage<RabbitMsg>
     }
   }
 
-  /// <summary>Field number for the "DstLocation" field.</summary>
+  /// <summary>Field number for the "dstLocation" field.</summary>
   public const int DstLocationFieldNumber = 3;
   private string dstLocation_ = "";
   [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -106,6 +107,17 @@ public sealed partial class RabbitMsg : pb::IMessage<RabbitMsg>
     get { return dstLocation_; }
     set {
       dstLocation_ = pb::ProtoPreconditions.CheckNotNull(value, "value");
+    }
+  }
+
+  /// <summary>Field number for the "dstType" field.</summary>
+  public const int DstTypeFieldNumber = 4;
+  private global::RabbitMsg.Types.DstType dstType_ = global::RabbitMsg.Types.DstType.Minio;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  public global::RabbitMsg.Types.DstType DstType {
+    get { return dstType_; }
+    set {
+      dstType_ = value;
     }
   }
 
@@ -125,6 +137,7 @@ public sealed partial class RabbitMsg : pb::IMessage<RabbitMsg>
     if (FileHash != other.FileHash) return false;
     if (CurLocation != other.CurLocation) return false;
     if (DstLocation != other.DstLocation) return false;
+    if (DstType != other.DstType) return false;
     return Equals(_unknownFields, other._unknownFields);
   }
 
@@ -134,6 +147,7 @@ public sealed partial class RabbitMsg : pb::IMessage<RabbitMsg>
     if (FileHash.Length != 0) hash ^= FileHash.GetHashCode();
     if (CurLocation.Length != 0) hash ^= CurLocation.GetHashCode();
     if (DstLocation.Length != 0) hash ^= DstLocation.GetHashCode();
+    if (DstType != global::RabbitMsg.Types.DstType.Minio) hash ^= DstType.GetHashCode();
     if (_unknownFields != null) {
       hash ^= _unknownFields.GetHashCode();
     }
@@ -162,6 +176,10 @@ public sealed partial class RabbitMsg : pb::IMessage<RabbitMsg>
       output.WriteRawTag(26);
       output.WriteString(DstLocation);
     }
+    if (DstType != global::RabbitMsg.Types.DstType.Minio) {
+      output.WriteRawTag(32);
+      output.WriteEnum((int) DstType);
+    }
     if (_unknownFields != null) {
       _unknownFields.WriteTo(output);
     }
@@ -183,6 +201,10 @@ public sealed partial class RabbitMsg : pb::IMessage<RabbitMsg>
       output.WriteRawTag(26);
       output.WriteString(DstLocation);
     }
+    if (DstType != global::RabbitMsg.Types.DstType.Minio) {
+      output.WriteRawTag(32);
+      output.WriteEnum((int) DstType);
+    }
     if (_unknownFields != null) {
       _unknownFields.WriteTo(ref output);
     }
@@ -200,6 +222,9 @@ public sealed partial class RabbitMsg : pb::IMessage<RabbitMsg>
     }
     if (DstLocation.Length != 0) {
       size += 1 + pb::CodedOutputStream.ComputeStringSize(DstLocation);
+    }
+    if (DstType != global::RabbitMsg.Types.DstType.Minio) {
+      size += 1 + pb::CodedOutputStream.ComputeEnumSize((int) DstType);
     }
     if (_unknownFields != null) {
       size += _unknownFields.CalculateSize();
@@ -220,6 +245,9 @@ public sealed partial class RabbitMsg : pb::IMessage<RabbitMsg>
     }
     if (other.DstLocation.Length != 0) {
       DstLocation = other.DstLocation;
+    }
+    if (other.DstType != global::RabbitMsg.Types.DstType.Minio) {
+      DstType = other.DstType;
     }
     _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
   }
@@ -247,6 +275,10 @@ public sealed partial class RabbitMsg : pb::IMessage<RabbitMsg>
           DstLocation = input.ReadString();
           break;
         }
+        case 32: {
+          DstType = (global::RabbitMsg.Types.DstType) input.ReadEnum();
+          break;
+        }
       }
     }
   #endif
@@ -271,6 +303,10 @@ public sealed partial class RabbitMsg : pb::IMessage<RabbitMsg>
         }
         case 26: {
           DstLocation = input.ReadString();
+          break;
+        }
+        case 32: {
+          DstType = (global::RabbitMsg.Types.DstType) input.ReadEnum();
           break;
         }
       }

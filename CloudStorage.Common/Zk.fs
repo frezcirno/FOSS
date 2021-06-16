@@ -1,4 +1,4 @@
-﻿module CloudStorage.Server.Zk
+﻿module CloudStorage.Common.Zk
 
 open System
 open System.IO

@@ -6,7 +6,33 @@
     </PropertyGroup>
 
     <ItemGroup>
+        <Compile Include="Config.fs" />
         <Compile Include="Utils.fs" />
+        <Compile Include="Redis.fs" />
+        <Compile Include="Database.fs" />
+        <Compile Include="AliyunOss.fs" />
+        <Compile Include="MinioOss.fs" />
+        <Compile Include="RabbitMq.fs" />
+        <Compile Include="Zmq.fs" />
+        <Compile Include="Zk.fs" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <PackageReference Update="FSharp.Core" Version="5.0.1" />
+      <PackageReference Include="Aliyun.OSS.SDK.NetCore" Version="2.13.0" />
+      <PackageReference Include="Dapper.FSharp" Version="2.1.0" />
+      <PackageReference Include="Google.Protobuf" Version="3.17.3" />
+      <PackageReference Include="Minio" Version="3.1.13" />
+      <PackageReference Include="mysqlconnector" Version="1.3.9" />
+      <PackageReference Include="NetMQ" Version="4.0.1.6" />
+      <PackageReference Include="Ply" Version="0.3.1" />
+      <PackageReference Include="RabbitMQ.Client" Version="6.2.1" />
+      <PackageReference Include="StackExchange.Redis" Version="2.2.4" />
+      <PackageReference Include="ZooKeeperNetEx" Version="3.4.12.4" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\CloudStorage.Message\CloudStorage.Message.csproj" />
     </ItemGroup>
 
 </Project>

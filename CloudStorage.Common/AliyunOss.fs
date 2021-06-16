@@ -1,4 +1,4 @@
-module CloudStorage.Server.AliyunOss
+module CloudStorage.Common.AliyunOss
 
 open System.IO
 open Aliyun.OSS

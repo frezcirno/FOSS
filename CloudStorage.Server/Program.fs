@@ -1,4 +1,5 @@
 open System.Text
+open CloudStorage.Common
 open CloudStorage.Server
 open System
 open Microsoft.AspNetCore.Authentication.JwtBearer
@@ -10,7 +11,6 @@ open Microsoft.Extensions.Hosting
 open Microsoft.Extensions.Logging
 open Giraffe
 open Microsoft.IdentityModel.Tokens
-open CloudStorage.Server.RabbitMq
 
 let errorHandler (ex: Exception) (logger: ILogger) =
     logger.LogError(EventId(), ex, "An unhandled exception has occurred while executing the request.")
@@ -71,8 +71,10 @@ type Startup(configuration: IConfiguration) =
 let main argv =
     Dapper.FSharp.OptionTypes.register ()
 
-    Publish(RabbitMsg.)
-//    Zk.main ()
+    //    Zk.main ()
+    Program.main null |> ignore /// 1
+    Program.main null |> ignore /// 2
+    Program.main null |> ignore /// 3
 
     Host
         .CreateDefaultBuilder(argv)

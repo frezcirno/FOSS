@@ -1,4 +1,4 @@
-﻿module CloudStorage.Server.MinioOss
+﻿module CloudStorage.Common.MinioOss
 
 open System
 open System.IO
