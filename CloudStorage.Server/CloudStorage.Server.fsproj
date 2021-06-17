@@ -7,7 +7,6 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="Handler.fs" />
-    <Compile Include="Test.fs" />
     <Compile Include="Program.fs" />
     <EmbeddedResource Remove="tmp\**" />
     <PackageReference Include="giraffe" Version="5.0.0" />

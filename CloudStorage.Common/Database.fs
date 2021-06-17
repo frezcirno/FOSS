@@ -5,7 +5,7 @@ open CloudStorage.Common
 open MySqlConnector
 open Dapper
 
-let conn =
+let NewConn () =
     new MySqlConnection(Config.Data.datasource)
 
 module File =
@@ -29,6 +29,7 @@ module File =
                file_loc = file_loc
                status = 1 |}
 
+        use conn = NewConn ()
         conn.Execute(sql, param) = 1
 
     /// 更新文件元信息
@@ -43,6 +44,7 @@ module File =
                file_size = file_size
                file_loc = file_loc |}
 
+        use conn = NewConn ()
         conn.Execute(sql, param) = 1
 
     /// 更新文件位置
@@ -55,6 +57,7 @@ module File =
             {| file_hash = file_hash
                file_loc = file_loc |}
 
+        use conn = NewConn ()
         conn.Execute(sql, param) = 1
 
     /// 更新文件元信息
@@ -69,13 +72,15 @@ module File =
                file_size = fileMeta.FileSize
                file_loc = fileMeta.FileLoc |}
 
+        use conn = NewConn ()
         conn.Execute(sql, param) = 1
 
     /// 删除文件信息
     let DeleteFileMeta (file_hash: string) =
         let sql =
             "DELETE FROM tbl_file WHERE file_hash = @file_hash"
-
+            
+        use conn = NewConn ()
         let cmd = new MySqlCommand(sql, conn)
 
         cmd.Parameters.AddWithValue("@file_hash", file_hash)
@@ -89,6 +94,7 @@ module File =
             "SELECT file_hash as FileHash, file_name as FileName, file_size as FileSize, file_loc as FileLoc, create_at as CreateAt FROM tbl_file "
             + "WHERE file_hash = @file_hash AND status = 1 LIMIT 1"
 
+        use conn = NewConn ()
         conn.Query<FileMeta>(sql, {| file_hash = file_hash |})
         |> List.ofSeq
         |> Utils.firstOrNone
@@ -99,6 +105,7 @@ module File =
             "SELECT file_hash as FileHash, file_name as FileName, file_size as FileSize, file_loc as FileLoc, create_at as CreateAt FROM tbl_file "
             + "WHERE file_name = @file_name AND status = 1 LIMIT 1"
 
+        use conn = NewConn ()
         conn.Query<FileMeta>(sql, {| file_name = file_name |})
         |> List.ofSeq
         |> Utils.firstOrNone
@@ -115,6 +122,7 @@ module File =
             "SELECT file_hash as FileHash, file_name as FileName, file_size as FileSize, file_loc as FileLoc, create_at as CreateAt FROM tbl_file "
             + "ORDER BY create_at DESC LIMIT @limit"
 
+        use conn = NewConn ()
         conn.Query<FileMeta>(sql, {| limit = limit |})
         |> Seq.toList
 
@@ -136,6 +144,7 @@ module User =
             {| user_name = username
                user_pwd = enc_pass |}
 
+        use conn = NewConn ()
         conn.Execute(sql, param) = 1
 
     /// 用户登录
@@ -147,6 +156,7 @@ module User =
             {| user_name = username
                user_pwd = enc_pass |}
 
+        use conn = NewConn ()
         Convert.ToInt32(conn.ExecuteScalar(sql, param)) = 1
 
     /// 查询用户信息
@@ -156,6 +166,7 @@ module User =
 
         let param = {| user_name = username |}
 
+        use conn = NewConn ()
         conn.Query<User>(sql, param)
         |> List.ofSeq
         |> Utils.firstOrNone
@@ -169,6 +180,7 @@ module User =
             {| user_name = username
                user_token = token |}
 
+        use conn = NewConn ()
         conn.Query(sql, param)
         |> List.ofSeq
         |> function
@@ -197,6 +209,7 @@ module UserFile =
                file_size = file_size
                upload_at = DateTime.Now |}
 
+        use conn = NewConn ()
         conn.Execute(sql, param) = 1
 
     /// 查询用户是否拥有某个文件
@@ -209,6 +222,7 @@ module UserFile =
             {| user_name = user_name
                file_name = file_name |}
 
+        use conn = NewConn ()
         Convert.ToInt32(conn.ExecuteScalar(sql, param)) = 1
 
     /// 用户文件信息查询
@@ -217,6 +231,7 @@ module UserFile =
             "SELECT user_name as UserName, file_hash as FileHash, file_name as FileName, file_size as FileSize, upload_at as UploadAt, last_active as LastActive FROM tbl_user_file "
             + "WHERE user_name = @user_name AND file_name = @file_name AND status = 1 LIMIT 1"
 
+        use conn = NewConn ()
         conn.Query<UserFile>(
             sql,
             {| file_name = fileName
@@ -236,6 +251,7 @@ module UserFile =
                limit = limit
                offset = page * limit |}
 
+        use conn = NewConn ()
         conn.Query<UserFile>(sql, param) |> List.ofSeq
 
     /// 更新文件元信息
@@ -249,13 +265,15 @@ module UserFile =
                file_name = fileName
                new_name = userFile.FileName |}
 
+        use conn = NewConn ()
         conn.Execute(sql, param) = 1
 
     /// 用户文件删除
     let DeleteUserFileByFileName (username: string) (fileName: string) =
         let sql =
-            "DELETE FROM tbl_user_file WHERE user_name = @user_name AND file_name = @file_name"
-
+            "UPDATE tbl_user_file SET status = 0 WHERE user_name = @user_name AND file_name = @file_name"
+            
+        use conn = NewConn ()
         let cmd = new MySqlCommand(sql, conn)
 
         cmd.Parameters.AddWithValue("@user_name", username)

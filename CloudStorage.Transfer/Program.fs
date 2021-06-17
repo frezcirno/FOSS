@@ -5,8 +5,14 @@ open CloudStorage.Common
 let ProcessTransfer (msg: RabbitMsg) : bool =
     use stream = File.OpenRead msg.CurLocation
     MinioOss.putObject msg.DstLocation stream
-    File.Delete msg.CurLocation
-    Database.File.UpdateFileLocByHash msg.FileHash msg.DstLocation
+
+    if Database.File.UpdateFileLocByHash msg.FileHash msg.DstLocation then
+        GC.Collect()
+        GC.WaitForPendingFinalizers()
+        File.Delete msg.CurLocation
+        true
+    else
+        false
 
 [<EntryPoint>]
 let main _ =
