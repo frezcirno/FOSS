@@ -42,7 +42,7 @@ let StartLocate () =
             (Encoding.UTF8.GetString msg.Body.Span).Trim('"')
 
         let path =
-            Path.Join [| Config.TEMP_FILE_PATH
+            Path.Join [| Config.TEMP_PATH
                          objectName |]
 
         /// 找到文件才回应

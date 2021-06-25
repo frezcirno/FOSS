@@ -6,7 +6,12 @@
     <PackageId>CloudStorage.Server</PackageId>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="Handler.fs" />
+    <Compile Include="Common.fs" />
+    <Compile Include="Storage.fs" />
+    <Compile Include="Upload.fs" />
+    <Compile Include="User.fs" />
+    <Compile Include="MpUpload.fs" />
+    <Compile Include="Transporter.fs" />
     <Compile Include="Program.fs" />
     <EmbeddedResource Remove="static\**" />
     <EmbeddedResource Remove="tmp\**" />

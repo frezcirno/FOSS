@@ -10,7 +10,7 @@ let PutObjectHandler (object_name: string) (next: HttpFunc) (ctx: HttpContext) =
     task {
         try
             let path =
-                Path.Join [| Config.TEMP_FILE_PATH
+                Path.Join [| Config.TEMP_PATH
                              object_name |]
 
             use f = File.OpenWrite path
@@ -36,7 +36,7 @@ let PutObjectHandler (object_name: string) (next: HttpFunc) (ctx: HttpContext) =
 let GetObjectHandler (object_name: string) (next: HttpFunc) (ctx: HttpContext) =
     try
         let path =
-            Path.Join [| Config.TEMP_FILE_PATH
+            Path.Join [| Config.TEMP_PATH
                          object_name |]
 
         let f = File.OpenRead path

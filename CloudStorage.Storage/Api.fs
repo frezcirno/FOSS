@@ -2,8 +2,8 @@
 
 open System
 open System.IO
-open System.Runtime.CompilerServices
-open System.Text.Json
+open System.Text
+open System.Threading
 open CloudStorage.Common
 open CloudStorage.Common.Utils
 open CloudStorage.Storage.Redis
@@ -18,6 +18,7 @@ open Microsoft.Extensions.Logging
 open Microsoft.AspNetCore.Http
 open Giraffe
 open Newtonsoft.Json
+open RabbitMQ.Client.Events
 open StackExchange.Redis
 
 /// 系统底层文件对象存储接口，内部服务，无鉴权，类似文件系统
@@ -117,22 +118,88 @@ let FileHandler (key: string) =
              GET >=> GetFileHandler(key)
              DELETE >=> DeleteFileHandler(key) ]
 
+
+let PutObjectHandler (object_name: string) (next: HttpFunc) (ctx: HttpContext) =
+    use f =
+        File.OpenWrite
+        <| Path.Join [| Config.TEMP_FILE_PATH
+                        "objects"
+                        object_name |]
+
+    if not f.CanWrite then
+        ServerErrors.internalError id next ctx
+    else
+        ctx.Request.Body.CopyTo f
+        Successful.ok id next ctx
+
+let GetObjectHandler (object_name: string) (next: HttpFunc) (ctx: HttpContext) =
+    use f =
+        File.OpenRead
+        <| Path.Join [| Config.TEMP_FILE_PATH
+                        "objects"
+                        object_name |]
+
+    if not f.CanRead then
+        ServerErrors.internalError id next ctx
+    else
+        streamData true f None None next ctx
+
+let ObjectHandler (object_name: string) =
+    choose [ GET >=> GetObjectHandler(object_name)
+             PUT >=> PutObjectHandler(object_name)
+             RequestErrors.methodNotAllowed id ]
+
+let LocateHandler (object_name: string) = choose []
+
 let ErrorHandler (ex: Exception) (logger: ILogger) =
     logger.LogError(EventId(), ex, "An unhandled exception has occurred while executing the request.")
 
     clearResponse
     >=> ServerErrors.INTERNAL_ERROR ex.Message
 
-
 let Router =
     choose [ route "/ping" >=> Successful.OK "pong"
-             routef "/file/%s" FileHandler ]
+             routef "/file/%s" FileHandler
+             routef "/object/%s" ObjectHandler
+             routef "/locate/%s" LocateHandler ]
+
+let Locate (name: string) = File.Exists name
+
+
+let StartHeartbeat () =
+    use q = new RabbitMq.Queue "heartbeat"
+
+    while true do
+        let bindAddr =
+            Environment.GetEnvironmentVariable "LISTEN_ADDRESS"
+
+        let bindAddrBytes = Encoding.UTF8.GetBytes bindAddr
+        q.Publish "apiServers" (ReadOnlyMemory bindAddrBytes)
+        Thread.Sleep 5000
+
+
+let StartLocate () =
+    use q = new RabbitMq.Queue "locate"
+    q.Bind "dataServers"
+
+    let callback (msg: BasicDeliverEventArgs) =
+        let objectName = Encoding.UTF8.GetString msg.Body.Span
+
+        let path =
+            Path.Join [| Config.TEMP_FILE_PATH
+                         "objects"
+                         objectName |]
+
+        if Locate path then
+            q.Send msg.BasicProperties.ReplyTo "LISTEN_ADDRESS"
+
+    q.Consume callback
 
 
 type Startup(configuration: IConfiguration) =
     member _.Configuration = configuration
 
-    member this.ConfigureServices(services: IServiceCollection) =
+    member _.ConfigureServices(services: IServiceCollection) =
         services.AddResponseCompression() |> ignore
 
         services.AddGiraffe() |> ignore
@@ -152,6 +219,11 @@ type Startup(configuration: IConfiguration) =
 // 主程序
 [<EntryPoint>]
 let main argv =
+
+    Thread(StartHeartbeat).Start()
+
+    StartLocate()
+
     Host
         .CreateDefaultBuilder(argv)
         .ConfigureWebHostDefaults(fun webHostBuilder ->

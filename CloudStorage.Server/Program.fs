@@ -1,3 +1,4 @@
+open System.IO
 open System.Text
 open CloudStorage.Common
 open CloudStorage.Server
@@ -11,6 +12,58 @@ open Microsoft.Extensions.Hosting
 open Microsoft.Extensions.Logging
 open Giraffe
 open Microsoft.IdentityModel.Tokens
+
+let routes : HttpHandler =
+    choose [ route "/user/signup" >=> User.UserRegister
+             route "/user/signin" >=> User.UserLogin
+             //             route "/user/signout" >=> User.UserLogout
+             route "/user/info"
+             >=> jwtAuthorized
+             >=> User.UserInfoHandler
+
+             route "/file/upload"
+             >=> choose [ POST
+                          >=> jwtAuthorized
+                          >=> Upload.FileUploadHandler
+                          RequestErrors.methodNotAllowed id ]
+             route "/file/meta"
+             >=> jwtAuthorized
+             >=> Upload.FileMetaHandler
+             route "/file/recent"
+             >=> jwtAuthorized
+             >=> Upload.RecentFileHandler
+             route "/file/download"
+             >=> jwtAuthorized
+             >=> Upload.FileDownloadHandler
+             route "/file/update"
+             >=> jwtAuthorized
+             >=> Upload.FileUpdateHandler
+             route "/file/delete"
+             >=> jwtAuthorized
+             >=> Upload.FileDeleteHandler
+
+             route "/file/fastupload"
+             >=> jwtAuthorized
+             >=> MpUpload.TryFastUploadHandler
+             route "/file/mpupload/init"
+             >=> jwtAuthorized
+             >=> MpUpload.InitMultipartUploadHandler
+             route "/file/mpupload/uppart"
+             >=> jwtAuthorized
+             >=> MpUpload.UploadPartHandler
+             route "/file/mpupload/complete"
+             >=> jwtAuthorized
+             >=> MpUpload.CompleteUploadPartHandler
+             route "/file/mpupload/cancel"
+             >=> jwtAuthorized
+             >=> MpUpload.CancelUploadPartHandler
+             route "/file/mpupload/status"
+             >=> jwtAuthorized
+             >=> MpUpload.MultipartUploadStatusHandler
+
+             RequestErrors.notFound (text "404 Not Found") ]
+
+
 
 let errorHandler (ex: Exception) (logger: ILogger) =
     logger.LogError(EventId(), ex, "An unhandled exception has occurred while executing the request.")
@@ -63,27 +116,34 @@ type Startup(configuration: IConfiguration) =
         app
             .UseAuthentication()
             //            .UseAuthorization()
-            .UseGiraffe Handler.routes
+            .UseGiraffe routes
 
 
 // 主程序
 [<EntryPoint>]
-let main argv =
+let main args =
     Dapper.FSharp.OptionTypes.register ()
 
-    //    Zk.main ()
-    Program.main null |> ignore /// 1
-    Program.main null |> ignore /// 2
-    Program.main null |> ignore /// 3
+    /// Create temp path
+    if not (Directory.Exists Config.TEMP_FILE_PATH) then
+        Directory.CreateDirectory Config.TEMP_FILE_PATH
+        |> ignore
 
-    Host
-        .CreateDefaultBuilder(argv)
-        .ConfigureAppConfiguration(fun config -> ())
-        .ConfigureWebHostDefaults(fun webHostBuilder ->
-            webHostBuilder
-                .UseStartup<Startup>()
-                .UseKestrel(fun k -> k.AddServerHeader <- false)
-            |> ignore)
+    //    Zk.main ()
+
+    /// Start transporter
+    Transporter.Transporter |> ignore
+
+    WebHostBuilder()
+        .UseConfiguration(
+            ConfigurationBuilder()
+                .AddCommandLine(args)
+                .Build()
+        )
+        .UseKestrel(fun opt ->
+            opt.AddServerHeader <- false
+            opt.Limits.MaxRequestBodySize <- 1024L * 1024L * 1024L)
+        .UseStartup<Startup>()
         .ConfigureLogging(fun loggerBuilder ->
             loggerBuilder
                 .AddFilter(fun lvl -> true)

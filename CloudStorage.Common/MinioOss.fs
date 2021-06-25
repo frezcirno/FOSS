@@ -10,10 +10,14 @@ let minio =
     MinioClient(Config.Minio.Endpoint, Config.Minio.AccessKey, Config.Minio.SecretKey)
 
 
-let putObjectAsync (key: string) (stream: Stream) =
-    let size = stream.Length
-    stream.Seek(0L, SeekOrigin.Begin) |> ignore
-    minio.PutObjectAsync(Config.Minio.Bucket, key, stream, size)
+let putObjectAsync (key: string) (stream: Stream) : Task<bool> =
+    task {
+        let size = stream.Length
+        stream.Seek(0L, SeekOrigin.Begin) |> ignore
+        do! minio.PutObjectAsync(Config.Minio.Bucket, key, stream, size)
+        return! Task.FromResult true
+    }
+
 
 let putObject (key: string) (stream: Stream) = (putObjectAsync key stream).Wait()
 
