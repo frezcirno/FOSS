@@ -8,6 +8,7 @@
   <ItemGroup>
     <Compile Include="Handler.fs" />
     <Compile Include="Program.fs" />
+    <EmbeddedResource Remove="static\**" />
     <EmbeddedResource Remove="tmp\**" />
     <PackageReference Include="giraffe" Version="5.0.0" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="5.0.7" />
@@ -16,22 +17,9 @@
   </ItemGroup>
   <ItemGroup>
     <Content Include="appsettings.json" />
-    <Content Include="static\common.css" />
-    <Content Include="static\error.html" />
-    <Content Include="static\index.html" />
-    <Content Include="static\signin.html" />
-    <Content Include="static\signup.html" />
-    <Content Include="static\upload.html" />
-    <Content Include="static\img\avatar.jpeg" />
-    <Content Include="static\js\auth.js" />
-    <Content Include="static\view\signup.html" />
-    <Content Include="static\view\signin.html" />
-    <Content Include="static\view\index.html" />
-    <Content Include="static\view\home.html" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\CloudStorage.Common\CloudStorage.Common.fsproj" />
-    <ProjectReference Include="..\CloudStorage.Message\CloudStorage.Message.csproj" />
     <ProjectReference Include="..\CloudStorage.Transfer\CloudStorage.Transfer.fsproj" />
   </ItemGroup>
 </Project>

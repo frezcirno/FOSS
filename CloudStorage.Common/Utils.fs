@@ -1,5 +1,6 @@
 ﻿module CloudStorage.Common.Utils
 
+open System
 open System.IO
 open System.Security.Cryptography
 
@@ -26,8 +27,6 @@ let firstOrNone =
     function
     | [] -> None
     | x :: _ -> Some x
-
-
 
 ///
 /// String and Bytes
@@ -68,3 +67,16 @@ let Response (code: int) (msg: string) (data: obj) =
 ///
 /// Configuration
 ///
+
+
+///
+/// Randomness
+///
+let rnd = Random()
+
+let rand () = rnd.Next()
+
+let choice (l: 'a list) =
+    let n = l.Length
+    let ri = rand () % n
+    l.[ri]

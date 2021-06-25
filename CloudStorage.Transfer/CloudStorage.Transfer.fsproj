@@ -11,7 +11,6 @@
 
     <ItemGroup>
       <ProjectReference Include="..\CloudStorage.Common\CloudStorage.Common.fsproj" />
-      <ProjectReference Include="..\CloudStorage.Message\CloudStorage.Message.csproj" />
     </ItemGroup>
 
     <ItemGroup>

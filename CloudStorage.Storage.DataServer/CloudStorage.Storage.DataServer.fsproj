@@ -1,0 +1,22 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net5.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="Objects.fs" />
+    <Compile Include="Program.fs" />
+    <Content Include="env" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\CloudStorage.Common\CloudStorage.Common.fsproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="giraffe" Version="5.0.0" />
+  </ItemGroup>
+
+</Project>
