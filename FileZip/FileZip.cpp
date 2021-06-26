@@ -27,7 +27,7 @@ bool __stdcall CheckFile(char* fileName, char* path)
 	if (pathStr.back() != '/')
 		pathStr += '/';
 	std::string file = pathStr + std::string(fileName);
-	if (PathFileExists(file.c_str()) == 1)
+	if (PathFileExistsA(file.c_str()) == 1)
 		return true;
 	else
 		return false;
@@ -44,7 +44,7 @@ void __stdcall CopyToDir(char* path, char* dirName)
 	// 尝试创建文件夹并清空
 	std::string completeDir = pathStr + dirNameStr;
 	try {
-		CreateDirectory(completeDir.c_str(), NULL);
+		CreateDirectoryA(completeDir.c_str(), NULL);
 	}
 	catch (...) {}
 	// 用于查找的句柄
@@ -105,7 +105,7 @@ void __stdcall RemoveDir(char* path, char* dirName)
 	handle = _findfirst(inPath.c_str(), &fileinfo);
 	if (handle == -1)
 	{
-		RemoveDirectory(completeDir.c_str());
+		RemoveDirectoryA(completeDir.c_str());
 		return;
 	}
 	do
@@ -117,5 +117,9 @@ void __stdcall RemoveDir(char* path, char* dirName)
 		}
 	} while (!_findnext(handle, &fileinfo));
 	_findclose(handle);
-	RemoveDirectory(completeDir.c_str());
+	RemoveDirectoryA(completeDir.c_str());
+}
+
+void __stdcall Greeting(char* name) {
+	printf("Hello, %s!", name);
 }
