@@ -6,7 +6,7 @@ open CloudStorage.Common
 open Giraffe
 
 
-/// 查询dataServer，找不到返回null
+/// 查询dataServer，找不到返回 ""
 let Locate (name: string) =
     use q = new RabbitMq.Queue ""
     q.Publish "dataServers" name

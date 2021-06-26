@@ -85,7 +85,6 @@ type Status =
 //                String logMsg = Thread.currentThread().getName() + " is follower, master is " + new String(leaderInfoBytes, "UTF-8")
 //                System.out.println(logMsg)
 //             catch (KeeperException.NoNodeException e1) 
-//                // 如果在获取leader信息的时候报了节点不存在，说明这个leader比较短命，刚抢到leader就又挂掉了
 //                lookingForLeader()
 //             catch (KeeperException | InterruptedException | UnsupportedEncodingException e1) 
 //                e1.printStackTrace()

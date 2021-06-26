@@ -1,3 +1,8 @@
-﻿LISTEN_ADDRESS=127.0.0.1:9991
-
-fanout exchange -> "dataServers", "apiServers"
+﻿killall dotnet
+LISTEN_ADDRESS=7c00h.xyz:9991 nohup dotnet ./data/CloudStorage.Storage.DataServer.dll --server.urls "http://0.0.0.0:9991" > data1.out &
+LISTEN_ADDRESS=7c00h.xyz:9992 nohup dotnet ./data/CloudStorage.Storage.DataServer.dll --server.urls "http://0.0.0.0:9992" > data2.out &
+LISTEN_ADDRESS=7c00h.xyz:9993 nohup dotnet ./data/CloudStorage.Storage.DataServer.dll --server.urls "http://0.0.0.0:9993" > data3.out &
+nohup dotnet ./api/CloudStorage.Storage.ApiServer.dll --server.urls "http://0.0.0.0:8881" > api1.out &
+nohup dotnet ./api/CloudStorage.Storage.ApiServer.dll --server.urls "http://0.0.0.0:8882" > api2.out &
+nohup dotnet ./api/CloudStorage.Storage.ApiServer.dll --server.urls "http://0.0.0.0:8883" > api3.out &
+nohup dotnet ./server/CloudStorage.Server.dll --server.urls "http://0.0.0.0:8000" > serv.out &
