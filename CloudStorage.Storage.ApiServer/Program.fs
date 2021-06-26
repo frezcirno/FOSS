@@ -43,7 +43,6 @@ let main args =
         )
         .UseKestrel(fun opt -> opt.AddServerHeader <- false)
         .UseStartup<Startup>()
-        .UseUrls("http://localhost:8888/")
         .ConfigureLogging(fun loggerBuilder ->
             loggerBuilder
                 .AddFilter(fun lvl -> true)

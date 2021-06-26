@@ -22,13 +22,13 @@ let PutObjectHandler (object_name: string) (next: HttpFunc) (ctx: HttpContext) =
                 return! Successful.ok id next ctx
         with
         | :? BadHttpRequestException as ex ->
-            printfn $"%s{ex.StackTrace}"
+            System.Diagnostics.Debug.WriteLine (sprintf  $"%s{ex.StackTrace}")
             return! RequestErrors.BAD_REQUEST "file size too large" next ctx
         | :? IOException as ex ->
-            printfn $"%s{ex.StackTrace}"
+            System.Diagnostics.Debug.WriteLine (sprintf  $"%s{ex.StackTrace}")
             return! RequestErrors.notFound id next ctx
         | ex ->
-            printfn $"%s{ex.StackTrace}"
+            System.Diagnostics.Debug.WriteLine (sprintf  $"%s{ex.StackTrace}")
             return! ServerErrors.internalError id next ctx
     }
 
@@ -47,10 +47,10 @@ let GetObjectHandler (object_name: string) (next: HttpFunc) (ctx: HttpContext) =
             streamData true f None None next ctx
     with
     | :? IOException as ex ->
-        printfn $"%s{ex.StackTrace}"
+        System.Diagnostics.Debug.WriteLine (sprintf  $"%s{ex.StackTrace}")
         RequestErrors.notFound id next ctx
     | ex ->
-        printfn $"%s{ex.StackTrace}"
+        System.Diagnostics.Debug.WriteLine (sprintf  $"%s{ex.StackTrace}")
         ServerErrors.internalError id next ctx
 
 

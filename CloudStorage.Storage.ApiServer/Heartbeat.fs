@@ -1,6 +1,7 @@
 ﻿module CloudStorage.Storage.ApiServer.Heartbeat
 
 open System
+open System.Collections.Generic
 open System.Text
 open System.Threading
 open CloudStorage.Common
@@ -8,7 +9,7 @@ open RabbitMQ.Client.Events
 
 
 let mutex = obj ()
-let dataServers = dict<string, DateTime> []
+let dataServers = Dictionary<string, DateTime>()
 
 let removeExpiredDataServer () =
     while true do
@@ -18,8 +19,9 @@ let removeExpiredDataServer () =
         for kv in dataServers do
             let t = kv.Value
 
-            if t.Add(TimeSpan.FromSeconds 10.0) < DateTime.Now then
+            if t.Add(TimeSpan.FromSeconds 30.0) < DateTime.Now then
                 /// is it ok?
+                System.Diagnostics.Debug.WriteLine(sprintf "%s no heartbeat, drop it." kv.Key)
                 dataServers.Remove kv.Key |> ignore
 
         Monitor.Exit mutex
@@ -29,11 +31,21 @@ let ListenHeartbeat () =
     let q = new RabbitMq.Queue ""
     q.Bind "apiServers"
 
-    let callback (msg: BasicDeliverEventArgs) =
-        let dataServer = Encoding.UTF8.GetString msg.Body.Span
-        Monitor.Enter mutex
-        dataServers.Add(dataServer, DateTime.Now)
-        Monitor.Exit mutex
+    let callback (ea: BasicDeliverEventArgs) =
+        let str = Encoding.UTF8.GetString ea.Body.Span
+        let dataServer = str.Trim('"')
+
+        System.Diagnostics.Debug.WriteLine(sprintf "%s comes in." dataServer)
+
+        try
+            try
+                Monitor.Enter mutex
+                dataServers.[dataServer] <- DateTime.Now
+            with ex ->
+                ex
+                ()
+        finally
+            Monitor.Exit mutex
 
     q.Consume callback |> ignore
 
@@ -41,10 +53,15 @@ let ListenHeartbeat () =
 
 
 let GetDataServers () : string list =
-    Monitor.Enter mutex
-    let res = dataServers.Keys |> Seq.toList
-    Monitor.Exit mutex
-    res
+    try
+        try
+            Monitor.Enter mutex
+            dataServers.Keys |> Seq.toList
+        with ex ->
+            ex
+            []
+    finally
+        Monitor.Exit mutex
 
 let ChooseRandomDataServer () : string =
     let res = GetDataServers()

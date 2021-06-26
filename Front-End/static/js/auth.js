@@ -1,0 +1,1 @@
+function queryParams(){return"username="+localStorage.getItem("username")+"&token="+localStorage.getItem("token")}

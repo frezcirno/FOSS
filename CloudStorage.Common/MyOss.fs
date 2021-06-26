@@ -17,7 +17,7 @@ let putObjectAsync (key: string) (stream: Stream) : Task<bool> =
         let bytes = mem.GetBuffer()
 
         let client =
-            RestClient("http://" + Config.MyOss.Server)
+            RestClient("http://" + Config.MyOss.Server.[0])
 
         let request =
             RestRequest("/objects/" + key)
@@ -32,7 +32,7 @@ let putObject (key: string) (stream: Stream) = (putObjectAsync key stream).Wait(
 let getObjectAsync (key: string) : Task<Stream> =
     task {
         let client =
-            RestClient("http://" + Config.MyOss.Server)
+            RestClient("http://" + Config.MyOss.Server.[0])
 
         let request = RestRequest("/objects/" + key)
         let res = client.Get request

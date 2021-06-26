@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "CloudStorage.Storage.ApiServer": {
+      "commandName": "Project",
+      "commandLineArgs": " --server.urls \"http://0.0.0.0:8881\""
+    }
+  }
+}

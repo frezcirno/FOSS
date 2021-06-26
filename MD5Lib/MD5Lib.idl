@@ -1,0 +1,37 @@
+﻿// MD5Lib.idl: MD5Lib 的 IDL 源
+//
+
+// 此文件将由 MIDL 工具处理以
+// 生成类型库(MD5Lib.tlb)和封送处理代码。
+
+import "oaidl.idl";
+import "ocidl.idl";
+
+[
+	object,
+	uuid(f583bcbf-f702-4586-a7c5-a59638b933fc),
+	dual,
+	nonextensible,
+	pointer_default(unique)
+]
+interface IMD5 : IDispatch
+{
+	[id(1)] HRESULT digest([in] BSTR data, [out] BSTR* result);
+};
+[
+	uuid(15fc2e1b-2f10-4410-9202-6d835d1c3165),
+	version(1.0),
+]
+library MD5LibLib
+{
+	importlib("stdole2.tlb");
+	[
+		uuid(5a1687c3-713c-4791-b394-daa4253a3419)
+	]
+	coclass MD5
+	{
+		[default] interface IMD5;
+	};
+};
+
+import "shobjidl.idl";
